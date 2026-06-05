@@ -29,7 +29,7 @@ struct GitSyncEngine: Sendable {
     init(
         gitRunner: GitRunner = GitRunner(),
         folderAccessService: FolderAccessService = FolderAccessService(),
-        now: @escaping @Sendable () -> Date = Date.init
+        now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.gitRunner = gitRunner
         self.folderAccessService = folderAccessService
@@ -284,7 +284,7 @@ enum GitSyncError: LocalizedError, Equatable, Sendable {
         )
     }
 
-    private var recoverySuggestion: String? {
+    var recoverySuggestion: String? {
         switch self {
         case .missingRepositoryURL:
             return "Open Settings and add a GitHub SSH repository URL for this folder."
