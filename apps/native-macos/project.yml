@@ -1,0 +1,48 @@
+name: GitFolder
+options:
+  bundleIdPrefix: app.gitfolder
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "16.0"
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: 1
+    SWIFT_VERSION: "5.9"
+    DEVELOPMENT_TEAM: "38MGF83L2L"
+
+targets:
+  GitFolder:
+    type: application
+    platform: macOS
+    sources:
+      - path: GitFolder
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.gitfolder.GitFolder
+        INFOPLIST_FILE: GitFolder/Info.plist
+        CODE_SIGN_ENTITLEMENTS: GitFolder/GitFolder.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_HARDENED_RUNTIME: true
+        CODE_SIGN_STYLE: Automatic
+    entitlements:
+      path: GitFolder/GitFolder.entitlements
+    info:
+      path: GitFolder/Info.plist
+      properties:
+        CFBundleDisplayName: GitFolder
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        LSApplicationCategoryType: public.app-category.developer-tools
+        LSMinimumSystemVersion: "14.0"
+        LSUIElement: true
+        NSHumanReadableCopyright: "Copyright © Sil van Diepen"
+  GitFolderTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: GitFolder

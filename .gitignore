@@ -1,0 +1,14 @@
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+coverage/
+.DS_Store
+.env
+.env.*
+!.env.example
+*.tgz
+apps/native-macos/*.xcodeproj/
+apps/native-macos/DerivedData/
+apps/native-macos/build/
+apps/native-macos/*.xcuserdata/

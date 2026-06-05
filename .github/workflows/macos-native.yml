@@ -1,0 +1,25 @@
+name: Native macOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type BUILD_MACOS to run the native macOS build
+        required: true
+        type: string
+
+jobs:
+  build:
+    if: ${{ inputs.confirm == 'BUILD_MACOS' }}
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: xcodegen generate
+        working-directory: apps/native-macos
+      - name: Build app without signing
+        run: |
+          xcodebuild             -project GitFolder.xcodeproj             -scheme GitFolder             -configuration Debug             -destination 'platform=macOS'             CODE_SIGNING_ALLOWED=NO             build
+        working-directory: apps/native-macos

@@ -1,0 +1,30 @@
+{
+  "name": "gitfolder-monorepo",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "check": "npm run typecheck --workspaces --if-present && npm test --workspaces --if-present && npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "site:dev": "npm run dev -w apps/website",
+    "site:build": "npm run build -w apps/website",
+    "core:build": "npm run build -w packages/core",
+    "macos:generate": "cd apps/native-macos && xcodegen generate"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.1",
+    "typescript": "^5.9.3",
+    "sass-embedded": "^1.96.0",
+    "vite": "^7.2.6",
+    "vitest": "^4.0.15",
+    "vue-tsc": "^3.1.8"
+  }
+}
