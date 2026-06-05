@@ -36,7 +36,6 @@ export function validateConfig(config: Partial<GitFolderConfig>): ValidationResu
 
   if (config.schemaVersion !== 1) errors.push('schemaVersion must be 1')
   if (!config.app) errors.push('app settings are required')
-  if (!config.license) errors.push('license is required')
   if (!Array.isArray(config.folders)) {
     errors.push('folders must be an array')
   } else {

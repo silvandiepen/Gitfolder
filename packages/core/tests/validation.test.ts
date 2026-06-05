@@ -1,16 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { createDefaultConfig, defaultLicense } from '../src/index.js'
+import { createDefaultConfig } from '../src/index.js'
 import { isAllowedSyncInterval, validateConfig, validateSyncedFolder } from '../src/validation.js'
 
 describe('GitFolder core contracts', () => {
-  it('uses the paid App Store lifetime license model', () => {
-    expect(defaultLicense).toEqual({
-      purchaseModel: 'app_store_paid_upfront',
-      priceEur: 5,
-      entitlement: 'lifetime',
-      trial: false,
-      subscription: false,
-      inAppPurchases: false,
+  it('keeps purchase metadata out of the app config contract', () => {
+    expect(createDefaultConfig()).not.toHaveProperty('license')
+    expect(validateConfig({ schemaVersion: 1, app: createDefaultConfig().app, folders: [] })).toEqual({
+      valid: true,
+      errors: [],
     })
   })
 

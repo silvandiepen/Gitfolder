@@ -3,32 +3,12 @@ import Foundation
 struct GitFolderConfig: Codable, Equatable, Sendable {
     var schemaVersion: Int
     var app: AppSettings
-    var license: ProductLicense
     var folders: [SyncedFolder]
 
     static let empty = GitFolderConfig(
         schemaVersion: 1,
         app: .defaults,
-        license: .appStoreLifetime,
         folders: []
-    )
-}
-
-struct ProductLicense: Codable, Equatable, Sendable {
-    var purchaseModel: String
-    var priceEur: Int
-    var entitlement: String
-    var trial: Bool
-    var subscription: Bool
-    var inAppPurchases: Bool
-
-    static let appStoreLifetime = ProductLicense(
-        purchaseModel: "app_store_paid_upfront",
-        priceEur: 5,
-        entitlement: "lifetime",
-        trial: false,
-        subscription: false,
-        inAppPurchases: false
     )
 }
 
