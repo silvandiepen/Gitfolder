@@ -1,6 +1,6 @@
 import Foundation
 
-struct SyncedFolder: Codable, Identifiable, Equatable {
+struct SyncedFolder: Codable, Identifiable, Equatable, Sendable {
     var id: UUID
     var name: String
     var localPath: String
@@ -19,7 +19,14 @@ struct SyncedFolder: Codable, Identifiable, Equatable {
     var lastStatus: SyncStatus
     var lastError: UserFacingError?
 
-    static func create(name: String, localPath: String, bookmarkData: Data?, repoUrl: String, branch: String = "main") -> SyncedFolder {
+    static func create(
+        name: String,
+        localPath: String,
+        bookmarkData: Data?,
+        repoUrl: String,
+        branch: String = "main",
+        syncIntervalMinutes: Int = 15
+    ) -> SyncedFolder {
         let now = Date()
         return SyncedFolder(
             id: UUID(),
@@ -30,7 +37,7 @@ struct SyncedFolder: Codable, Identifiable, Equatable {
             provider: "github",
             authMode: "ssh",
             branch: branch,
-            syncIntervalMinutes: 15,
+            syncIntervalMinutes: syncIntervalMinutes,
             enabled: true,
             createdAt: now,
             updatedAt: now,
@@ -43,7 +50,7 @@ struct SyncedFolder: Codable, Identifiable, Equatable {
     }
 }
 
-enum SyncStatus: String, Codable, Equatable {
+enum SyncStatus: String, Codable, Equatable, Sendable {
     case idle
     case checking
     case syncing
@@ -55,7 +62,7 @@ enum SyncStatus: String, Codable, Equatable {
     case conflict
 }
 
-struct UserFacingError: Codable, Equatable {
+struct UserFacingError: Codable, Equatable, Sendable {
     var code: String
     var title: String
     var message: String

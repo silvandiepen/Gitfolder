@@ -1,6 +1,6 @@
 import Foundation
 
-struct GitCommandResult: Equatable {
+struct GitCommandResult: Equatable, Sendable {
     var exitCode: Int32
     var standardOutput: String
     var standardError: String
@@ -8,12 +8,18 @@ struct GitCommandResult: Equatable {
     var succeeded: Bool { exitCode == 0 }
 }
 
-struct GitRunner {
-    func run(_ arguments: [String], in workingDirectory: URL, timeoutSeconds: TimeInterval = 30) throws -> GitCommandResult {
+struct GitRunner: Sendable {
+    func run(
+        _ arguments: [String],
+        in workingDirectory: URL,
+        timeoutSeconds: TimeInterval = 30,
+        environment: [String: String] = [:]
+    ) throws -> GitCommandResult {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = ["git"] + arguments
         process.currentDirectoryURL = workingDirectory
+        process.environment = ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
 
         let outputPipe = Pipe()
         let errorPipe = Pipe()
@@ -39,7 +45,7 @@ struct GitRunner {
     }
 }
 
-enum GitRunnerError: LocalizedError {
+enum GitRunnerError: LocalizedError, Sendable {
     case timedOut
 
     var errorDescription: String? {

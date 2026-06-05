@@ -55,7 +55,7 @@ struct ConfigStore {
     }
 }
 
-enum ConfigStoreError: LocalizedError {
+enum ConfigStoreError: LocalizedError, Sendable {
     case unsupportedSchemaVersion(Int)
 
     var errorDescription: String? {

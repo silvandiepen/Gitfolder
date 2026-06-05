@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-struct FolderAccessService {
+struct FolderAccessService: Sendable {
     func pickFolder() -> URL? {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
@@ -9,6 +9,17 @@ struct FolderAccessService {
         panel.canChooseFiles = false
         panel.canCreateDirectories = false
         panel.prompt = "Add Folder"
+        return panel.runModal() == .OK ? panel.url : nil
+    }
+
+    func pickPrivateKey() -> URL? {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.canCreateDirectories = false
+        panel.prompt = "Choose SSH Key"
+        panel.message = "Choose the private SSH key GitFolder should use for GitHub pushes."
         return panel.runModal() == .OK ? panel.url : nil
     }
 
@@ -24,9 +35,27 @@ struct FolderAccessService {
         }
         return url
     }
+
+    func withSecurityScopedAccess<T>(for folder: SyncedFolder, operation: (URL) throws -> T) throws -> T {
+        let url: URL
+        if let bookmarkData = folder.bookmarkData {
+            url = try resolveBookmark(bookmarkData)
+        } else {
+            url = URL(fileURLWithPath: folder.localPath)
+        }
+
+        let didStartAccessing = url.startAccessingSecurityScopedResource()
+        defer {
+            if didStartAccessing {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        return try operation(url)
+    }
 }
 
-enum FolderAccessError: LocalizedError {
+enum FolderAccessError: LocalizedError, Sendable {
     case staleBookmark
 
     var errorDescription: String? {

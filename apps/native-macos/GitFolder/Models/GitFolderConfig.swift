@@ -1,6 +1,6 @@
 import Foundation
 
-struct GitFolderConfig: Codable, Equatable {
+struct GitFolderConfig: Codable, Equatable, Sendable {
     var schemaVersion: Int
     var app: AppSettings
     var license: ProductLicense
@@ -14,7 +14,7 @@ struct GitFolderConfig: Codable, Equatable {
     )
 }
 
-struct ProductLicense: Codable, Equatable {
+struct ProductLicense: Codable, Equatable, Sendable {
     var purchaseModel: String
     var priceEur: Int
     var entitlement: String
@@ -32,11 +32,15 @@ struct ProductLicense: Codable, Equatable {
     )
 }
 
-struct AppSettings: Codable, Equatable {
+struct AppSettings: Codable, Equatable, Sendable {
     var launchAtLogin: Bool
     var pauseAllSyncing: Bool
     var defaultSyncIntervalMinutes: Int
     var defaultBranch: String
+    var gitAuthorName: String?
+    var gitAuthorEmail: String?
+    var sshPrivateKeyPath: String?
+    var sshPrivateKeyBookmarkData: Data?
     var showNotificationsFor: [String]
     var logRetentionDays: Int
 
@@ -45,6 +49,10 @@ struct AppSettings: Codable, Equatable {
         pauseAllSyncing: false,
         defaultSyncIntervalMinutes: 15,
         defaultBranch: "main",
+        gitAuthorName: nil,
+        gitAuthorEmail: nil,
+        sshPrivateKeyPath: nil,
+        sshPrivateKeyBookmarkData: nil,
         showNotificationsFor: [
             "sync_failed",
             "github_access_failed",
