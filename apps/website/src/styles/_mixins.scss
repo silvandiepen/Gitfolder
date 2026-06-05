@@ -1,0 +1,52 @@
+// ==========================================================================
+// BEM helpers & reusable patterns for GitFolder
+// ==========================================================================
+
+/// BEM element selector — `.block__element`
+@mixin e($name) {
+  &__#{$name} {
+    @content;
+  }
+}
+
+/// BEM modifier selector — `.block--modifier`
+@mixin m($name) {
+  &--#{$name} {
+    @content;
+  }
+}
+
+/// Smooth card surface
+@mixin card-surface {
+  background: var(--color-surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-border-light);
+}
+
+/// Truncate text with ellipsis
+@mixin truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/// Center with flexbox
+@mixin flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/// Responsive breakpoints
+@mixin tablet {
+  @media (max-width: 1024px) {
+    @content;
+  }
+}
+
+@mixin mobile {
+  @media (max-width: 640px) {
+    @content;
+  }
+}
