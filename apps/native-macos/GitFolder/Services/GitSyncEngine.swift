@@ -70,7 +70,7 @@ struct GitSyncEngine: Sendable {
             try ensureRemote(in: folderURL, repoUrl: updatedFolder.repoUrl, environment: environment)
             try ensureBranch(in: folderURL, branch: updatedFolder.branch, environment: environment)
 
-            let status = try requireSuccess(git(["status", "--porcelain"], in: folderURL, environment: environment), failure: .gitStatusFailed)
+            let status = try requireSuccess(git(["status", "--porcelain"], in: folderURL, environment: environment), failure: .gitStatusFailed())
             guard !status.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 updatedFolder.lastSuccessfulSyncAt = now()
                 updatedFolder.updatedAt = now()
@@ -78,7 +78,7 @@ struct GitSyncEngine: Sendable {
                 return FolderSyncOutcome(folder: updatedFolder, changed: false, pushed: false, message: "No changes")
             }
 
-            _ = try requireSuccess(git(["add", "-A"], in: folderURL, environment: environment), failure: .gitAddFailed)
+            _ = try requireSuccess(git(["add", "-A"], in: folderURL, environment: environment), failure: .gitAddFailed())
 
             let commitMessage = SnapshotCommitMessage.make(date: now())
             let commit = git(["commit", "-m", commitMessage], in: folderURL, timeoutSeconds: 60, environment: environment)
@@ -112,7 +112,7 @@ struct GitSyncEngine: Sendable {
     private func ensureRepository(in folderURL: URL, folder: SyncedFolder, options: GitSyncOptions, environment: [String: String]) throws {
         let gitDirectory = folderURL.appending(path: ".git", directoryHint: .isDirectory)
         if !FileManager.default.fileExists(atPath: gitDirectory.path) {
-            _ = try requireSuccess(git(["init"], in: folderURL, environment: environment), failure: .gitInitFailed)
+            _ = try requireSuccess(git(["init"], in: folderURL, environment: environment), failure: .gitInitFailed())
         }
 
         if let authorName = nonEmpty(options.gitAuthorName) {
@@ -131,13 +131,13 @@ struct GitSyncEngine: Sendable {
         if currentRemote.succeeded {
             let existing = currentRemote.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
             guard existing == repoUrl else {
-                _ = try requireSuccess(git(["remote", "set-url", "origin", repoUrl], in: folderURL, environment: environment), failure: .gitRemoteFailed)
+                _ = try requireSuccess(git(["remote", "set-url", "origin", repoUrl], in: folderURL, environment: environment), failure: .gitRemoteFailed())
                 return
             }
             return
         }
 
-        _ = try requireSuccess(git(["remote", "add", "origin", repoUrl], in: folderURL, environment: environment), failure: .gitRemoteFailed)
+        _ = try requireSuccess(git(["remote", "add", "origin", repoUrl], in: folderURL, environment: environment), failure: .gitRemoteFailed())
     }
 
     private func ensureBranch(in folderURL: URL, branch: String, environment: [String: String]) throws {
@@ -150,7 +150,7 @@ struct GitSyncEngine: Sendable {
         let checkoutExisting = git(["checkout", branchName], in: folderURL, environment: environment)
         if checkoutExisting.succeeded { return }
 
-        _ = try requireSuccess(git(["checkout", "-B", branchName], in: folderURL, environment: environment), failure: .gitCheckoutFailed)
+        _ = try requireSuccess(git(["checkout", "-B", branchName], in: folderURL, environment: environment), failure: .gitCheckoutFailed())
     }
 
     private func git(_ arguments: [String], in workingDirectory: URL, timeoutSeconds: TimeInterval = 30, environment: [String: String] = [:]) -> GitCommandResult {
