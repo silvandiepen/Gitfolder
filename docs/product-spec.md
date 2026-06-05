@@ -84,20 +84,59 @@ GitFolder
 └─ Quit GitFolder
 ```
 
+## Business model
+
+Phase 1 is a paid Mac App Store utility.
+
+```txt
+Price: €5
+Purchase: one-time
+Entitlement: lifetime
+Subscriptions: no
+In-app purchases: no
+Distribution: Mac App Store only
+```
+
+This keeps the product simple. GitFolder does not need a billing backend, license server, account system, or external checkout in Phase 1.
+
 ## Core data model
+
+The full data model lives in [Data model](data-model.md).
+
+At the product level, the key entity is still a synced folder:
 
 ```ts
 type SyncedFolder = {
   id: string
   name: string
   localPath: string
+  bookmarkData?: string
   repoUrl: string
+  provider: 'github'
+  authMode: 'ssh'
   branch: string
-  syncIntervalMinutes: number
+  syncIntervalMinutes: 5 | 15 | 30 | 60
   enabled: boolean
+  createdAt: string
+  updatedAt: string
   lastSyncAt?: string
-  lastStatus: 'idle' | 'syncing' | 'synced' | 'paused' | 'error' | 'conflict'
-  lastError?: string
+  lastSuccessfulSyncAt?: string
+  lastStatus:
+    | 'idle'
+    | 'checking'
+    | 'syncing'
+    | 'synced'
+    | 'paused'
+    | 'waiting_for_connection'
+    | 'needs_attention'
+    | 'error'
+    | 'conflict'
+  lastError?: {
+    code: string
+    title: string
+    message: string
+    recoverySuggestion?: string
+  }
 }
 ```
 

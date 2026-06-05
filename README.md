@@ -32,6 +32,9 @@ Phase 1 is a personal macOS utility with a small scope:
 ## Documentation
 
 - [Product spec](docs/product-spec.md)
+- [Data model](docs/data-model.md)
+- [Implementation plan](docs/implementation-plan.md)
+- [App Store and business model](docs/app-store.md)
 - [Phase 1 scope](docs/phase-1.md)
 - [Sync model](docs/sync-model.md)
 - [GitHub access](docs/github-access.md)

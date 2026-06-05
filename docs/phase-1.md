@@ -2,7 +2,7 @@
 
 ## Summary
 
-Phase 1 is a minimal personal macOS menu bar app.
+Phase 1 is a minimal paid macOS menu bar app distributed through the Mac App Store.
 
 It should prove that the core workflow works:
 

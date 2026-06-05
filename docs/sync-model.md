@@ -21,16 +21,20 @@ For each enabled folder:
   3. Check that Git is available.
   4. Check whether the folder is a Git repository.
   5. If needed, initialize Git and connect remote.
-  6. Run git status --porcelain.
-  7. If no changes, mark as synced/no changes.
-  8. If changes exist, wait briefly.
-  9. Check status again.
-  10. Stage changes.
-  11. Create a snapshot commit.
-  12. Pull/rebase from remote.
-  13. Push to remote.
-  14. Update status.
+  6. Inspect repository state.
+  7. Stop if merge, rebase, conflict, or unsafe divergence exists.
+  8. Fetch remote state.
+  9. Check whether local changes exist.
+  10. If no changes, mark as synced/no changes.
+  11. If changes exist, wait briefly.
+  12. Check status again.
+  13. Stage changes.
+  14. Create a snapshot commit.
+  15. Push to remote.
+  16. Update status.
 ```
+
+Important: do not make a local snapshot commit before checking whether the repository is already in an unsafe state. If the remote changed in a way GitFolder cannot safely handle, pause the folder and ask for attention.
 
 ## Commands
 

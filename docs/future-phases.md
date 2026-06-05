@@ -37,8 +37,8 @@
 - Launch at login.
 - Notification preferences.
 - App icon.
-- Signed/notarized builds.
-- App Store readiness if desired.
+- Signed/notarized Mac App Store build.
+- App Store product page and screenshots.
 
 ## Possible positioning later
 
