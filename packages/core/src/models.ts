@@ -1,14 +1,5 @@
 export type ISODateTime = string
 
-export type ProductLicense = {
-  purchaseModel: 'app_store_paid_upfront'
-  priceEur: 5
-  entitlement: 'lifetime'
-  trial: false
-  subscription: false
-  inAppPurchases: false
-}
-
 export type SyncStatus =
   | 'idle'
   | 'checking'
@@ -27,7 +18,6 @@ export type GitAuthMode = 'ssh'
 export type GitFolderConfig = {
   schemaVersion: 1
   app: AppSettings
-  license: ProductLicense
   folders: SyncedFolder[]
 }
 

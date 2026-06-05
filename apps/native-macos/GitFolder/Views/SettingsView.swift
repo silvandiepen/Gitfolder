@@ -8,109 +8,117 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 16) {
             header
 
-            Form {
-                Section("Global Sync") {
-                    Toggle(
-                        "Pause all syncing",
-                        isOn: Binding(
-                            get: { appModel.config.app.pauseAllSyncing },
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    settingsSection("Global Sync") {
+                        Toggle(
+                            "Pause all syncing",
+                            isOn: Binding(
+                                get: { appModel.config.app.pauseAllSyncing },
+                                set: { newValue in
+                                    appModel.config.app.pauseAllSyncing = newValue
+                                    appModel.save(message: newValue ? "Syncing paused" : "Syncing resumed")
+                                }
+                            )
+                        )
+                        Picker("Default interval", selection: Binding(
+                            get: { appModel.config.app.defaultSyncIntervalMinutes },
                             set: { newValue in
-                                appModel.config.app.pauseAllSyncing = newValue
-                                appModel.save(message: newValue ? "Syncing paused" : "Syncing resumed")
+                                appModel.config.app.defaultSyncIntervalMinutes = newValue
+                                appModel.save(message: "Default interval updated")
                             }
-                        )
-                    )
-                    Picker("Default interval", selection: Binding(
-                        get: { appModel.config.app.defaultSyncIntervalMinutes },
-                        set: { newValue in
-                            appModel.config.app.defaultSyncIntervalMinutes = newValue
-                            appModel.save(message: "Default interval updated")
+                        )) {
+                            Text("5 minutes").tag(5)
+                            Text("15 minutes").tag(15)
+                            Text("30 minutes").tag(30)
+                            Text("60 minutes").tag(60)
                         }
-                    )) {
-                        Text("5 minutes").tag(5)
-                        Text("15 minutes").tag(15)
-                        Text("30 minutes").tag(30)
-                        Text("60 minutes").tag(60)
-                    }
-                    Button(appModel.isSyncing ? "Syncing…" : "Sync All Now") {
-                        appModel.syncNow()
-                    }
-                    .disabled(appModel.isSyncing || appModel.config.folders.isEmpty)
-                }
-
-                Section("Git Identity") {
-                    TextField(
-                        "Author name",
-                        text: Binding(
-                            get: { appModel.config.app.gitAuthorName ?? "" },
-                            set: { newValue in
-                                appModel.config.app.gitAuthorName = newValue.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
-                                appModel.save(message: "Git author updated")
-                            }
-                        )
-                    )
-                    TextField(
-                        "Author email",
-                        text: Binding(
-                            get: { appModel.config.app.gitAuthorEmail ?? "" },
-                            set: { newValue in
-                                appModel.config.app.gitAuthorEmail = newValue.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
-                                appModel.save(message: "Git author updated")
-                            }
-                        )
-                    )
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("SSH private key")
-                            Text(appModel.config.app.sshPrivateKeyPath ?? "Using system/default Git SSH access")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
+                        Button(appModel.isSyncing ? "Syncing…" : "Sync All Now") {
+                            appModel.syncNow()
                         }
-                        Spacer()
-                        Button("Choose Key…") {
-                            appModel.chooseSSHPrivateKey()
-                        }
-                        if appModel.config.app.sshPrivateKeyPath != nil {
-                            Button("Clear") {
-                                appModel.clearSSHPrivateKey()
-                            }
-                        }
-                    }
-                    Text("For Mac App Store sandbox builds, choose the SSH key GitFolder should use. Without this, system Git may not be able to read ~/.ssh.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Section("Folders") {
-                    if appModel.config.folders.isEmpty {
-                        ContentUnavailableView(
-                            "No folders yet",
-                            systemImage: "folder.badge.plus",
-                            description: Text("Add a folder and connect it to a GitHub SSH repository URL.")
-                        )
-                    } else {
-                        ForEach(appModel.config.folders) { folder in
-                            FolderSettingsRow(folder: folder)
-                        }
+                        .disabled(appModel.isSyncing || appModel.config.folders.isEmpty)
                     }
 
-                    Button {
-                        appModel.showAddFolderSheet()
-                    } label: {
-                        Label("Add Folder…", systemImage: "folder.badge.plus")
+                    settingsSection("Git Identity") {
+                        labeledRow("Author name") {
+                            TextField(
+                                "Author name",
+                                text: Binding(
+                                    get: { appModel.config.app.gitAuthorName ?? "" },
+                                    set: { newValue in
+                                        appModel.config.app.gitAuthorName = newValue.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+                                        appModel.save(message: "Git author updated")
+                                    }
+                                )
+                            )
+                            .textFieldStyle(.roundedBorder)
+                        }
+                        labeledRow("Author email") {
+                            TextField(
+                                "Author email",
+                                text: Binding(
+                                    get: { appModel.config.app.gitAuthorEmail ?? "" },
+                                    set: { newValue in
+                                        appModel.config.app.gitAuthorEmail = newValue.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+                                        appModel.save(message: "Git author updated")
+                                    }
+                                )
+                            )
+                            .textFieldStyle(.roundedBorder)
+                        }
+                        HStack(alignment: .center, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("SSH private key")
+                                    .font(.callout.weight(.medium))
+                                Text(appModel.config.app.sshPrivateKeyPath ?? "Using system/default Git SSH access")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                            }
+                            Spacer(minLength: 16)
+                            Button("Choose Key…") {
+                                appModel.chooseSSHPrivateKey()
+                            }
+                            if appModel.config.app.sshPrivateKeyPath != nil {
+                                Button("Clear") {
+                                    appModel.clearSSHPrivateKey()
+                                }
+                            }
+                        }
+                        Text("Choose an SSH key if the sandbox cannot read your default Git SSH setup.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    settingsSection("Folders") {
+                        if appModel.config.folders.isEmpty {
+                            ContentUnavailableView(
+                                "No folders yet",
+                                systemImage: "folder.badge.plus",
+                                description: Text("Add a folder and connect it to a GitHub SSH repository URL.")
+                            )
+                            .frame(maxWidth: .infinity)
+                        } else {
+                            VStack(alignment: .leading, spacing: 12) {
+                                ForEach(appModel.config.folders) { folder in
+                                    FolderSettingsRow(folder: folder)
+                                }
+                            }
+                        }
+
+                        Button {
+                            appModel.showAddFolderSheet()
+                        } label: {
+                            Label("Add Folder…", systemImage: "folder.badge.plus")
+                        }
                     }
                 }
-
-                Section("Purchase") {
-                    Text("€5 lifetime Mac App Store purchase")
-                    Text("No subscription, no GitFolder cloud service, no in-app purchases.")
-                        .foregroundStyle(.secondary)
-                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .padding()
-        .frame(minWidth: 640, minHeight: 560)
+        .frame(minWidth: 720, minHeight: 560)
         .onAppear {
             appModel.loadIfNeeded()
         }
@@ -139,6 +147,43 @@ struct SettingsView: View {
                 .font(.callout)
                 .foregroundStyle(appModel.config.folders.contains(where: { $0.lastStatus == .error }) ? .red : .secondary)
         }
+    }
+
+    private func settingsSection<Content: View>(
+        _ title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.headline)
+            VStack(alignment: .leading, spacing: 10) {
+                content()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.secondary.opacity(0.07))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.secondary.opacity(0.14), lineWidth: 1)
+            )
+        }
+    }
+
+    private func labeledRow<Content: View>(
+        _ title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(title)
+                .font(.callout.weight(.medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 118, alignment: .trailing)
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -179,18 +224,35 @@ private struct FolderSettingsRow: View {
                 statusBadge
             }
 
-            TextField("GitHub SSH repository URL", text: $draft.repoUrl)
-                .textFieldStyle(.roundedBorder)
-            HStack {
-                TextField("Branch", text: $draft.branch)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("GitHub SSH repository URL")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                TextField("git@github.com:owner/repo.git", text: $draft.repoUrl)
                     .textFieldStyle(.roundedBorder)
-                Picker("Interval", selection: $draft.syncIntervalMinutes) {
-                    Text("5m").tag(5)
-                    Text("15m").tag(15)
-                    Text("30m").tag(30)
-                    Text("60m").tag(60)
+            }
+
+            HStack(alignment: .lastTextBaseline, spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Branch")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                    TextField("main", text: $draft.branch)
+                        .textFieldStyle(.roundedBorder)
                 }
-                .frame(width: 150)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Interval")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                    Picker("Interval", selection: $draft.syncIntervalMinutes) {
+                        Text("5m").tag(5)
+                        Text("15m").tag(15)
+                        Text("30m").tag(30)
+                        Text("60m").tag(60)
+                    }
+                    .labelsHidden()
+                    .frame(width: 150, alignment: .leading)
+                }
             }
 
             if let error = latestError {

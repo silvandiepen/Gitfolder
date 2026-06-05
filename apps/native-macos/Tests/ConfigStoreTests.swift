@@ -3,14 +3,12 @@ import XCTest
 @testable import GitFolder
 
 final class ConfigStoreTests: XCTestCase {
-    func testDefaultConfigUsesAppStoreLifetimeLicense() {
+    func testDefaultConfigKeepsPurchaseMetadataOutOfAppState() {
         let config = GitFolderConfig.empty
 
-        XCTAssertEqual(config.license.purchaseModel, "app_store_paid_upfront")
-        XCTAssertEqual(config.license.priceEur, 5)
-        XCTAssertEqual(config.license.entitlement, "lifetime")
-        XCTAssertFalse(config.license.subscription)
-        XCTAssertFalse(config.license.inAppPurchases)
+        XCTAssertEqual(config.schemaVersion, 1)
+        XCTAssertTrue(config.folders.isEmpty)
+        XCTAssertEqual(config.app.defaultSyncIntervalMinutes, 15)
     }
 
     func testSyncedFolderCreateKeepsConfiguredInterval() {

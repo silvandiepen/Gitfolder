@@ -1,7 +1,7 @@
 <template>
   <main class="home-page">
     <section class="home-page__hero">
-      <p class="home-page__eyebrow">Mac App Store utility · €5 once · no subscription</p>
+      <p class="home-page__eyebrow">Mac App Store utility · local-first GitHub snapshots</p>
       <h1>Automatic version history for your folders.</h1>
       <p>
         GitFolder is a small macOS menu bar app that watches selected folders and creates quiet GitHub snapshot commits when files change.
@@ -12,9 +12,8 @@
       </div>
     </section>
     <section id="app-store" class="home-page__card">
-      <h2>Simple purchase, simple app.</h2>
+      <h2>Simple app, simple setup.</h2>
       <ul>
-        <li>One-time €5 lifetime purchase.</li>
         <li>No GitFolder account or billing backend.</li>
         <li>Uses your existing GitHub SSH setup.</li>
         <li>Your files go only to repositories you choose.</li>
