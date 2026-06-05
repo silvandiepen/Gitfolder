@@ -118,12 +118,12 @@ private struct FolderMenu: View {
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: folder.localPath)])
             }
 
-            Button("Copy Repository URL", systemImage: "doc.on.doc") {
+            Button("Copy Repository Web URL", systemImage: "doc.on.doc") {
                 NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(folder.repoUrl, forType: .string)
-                appModel.lastMessage = "Copied \(folder.name) repository URL"
+                NSPasteboard.general.setString(folder.repositoryWebURLString, forType: .string)
+                appModel.lastMessage = "Copied \(folder.name) repository web URL"
             }
-            .disabled(folder.repoUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .disabled(folder.repositoryWebURLString.isEmpty)
 
             Divider()
 

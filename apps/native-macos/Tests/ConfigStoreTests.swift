@@ -29,6 +29,32 @@ final class ConfigStoreTests: XCTestCase {
         XCTAssertTrue(folder.enabled)
     }
 
+    func testSyncedFolderCreatesRepositoryWebURLFromSSHURL() {
+        let folder = SyncedFolder.create(
+            name: "Documents",
+            localPath: "/tmp/Documents",
+            bookmarkData: nil,
+            repoUrl: "git@github.com:silvandiepen/documents.git"
+        )
+
+        XCTAssertEqual(folder.repositoryWebURLString, "https://github.com/silvandiepen/documents")
+    }
+
+    func testRepositoryWebURLSupportsCommonCloneURLForms() {
+        XCTAssertEqual(
+            SyncedFolder.webURLString(fromRepositoryURL: "ssh://git@github.com/silvandiepen/documents.git"),
+            "https://github.com/silvandiepen/documents"
+        )
+        XCTAssertEqual(
+            SyncedFolder.webURLString(fromRepositoryURL: "https://github.com/silvandiepen/documents.git"),
+            "https://github.com/silvandiepen/documents"
+        )
+        XCTAssertEqual(
+            SyncedFolder.webURLString(fromRepositoryURL: " git@gitlab.com:group/documents.git\n"),
+            "https://gitlab.com/group/documents"
+        )
+    }
+
     func testSnapshotCommitMessageIsStableAndIdentifiable() {
         let date = Date(timeIntervalSince1970: 1_700_000_000)
 
