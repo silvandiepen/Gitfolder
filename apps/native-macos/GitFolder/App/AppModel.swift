@@ -7,10 +7,13 @@ final class AppModel {
     var config: GitFolderConfig = .empty
     var isSyncing = false
     var lastMessage = "Ready"
+    var isShowingAddFolderSheet = false
+    var focusedFolderID: UUID?
 
     @ObservationIgnored private let configStore: ConfigStore
     @ObservationIgnored private let syncEngine: GitSyncEngine
     @ObservationIgnored private var scheduler: Timer?
+    @ObservationIgnored private var didLoad = false
 
     init(configStore: ConfigStore = ConfigStore(), syncEngine: GitSyncEngine = GitSyncEngine()) {
         self.configStore = configStore
@@ -20,6 +23,12 @@ final class AppModel {
     func invalidateScheduler() {
         scheduler?.invalidate()
         scheduler = nil
+    }
+
+    func loadIfNeeded() {
+        guard !didLoad else { return }
+        didLoad = true
+        load()
     }
 
     func load() {
@@ -41,6 +50,15 @@ final class AppModel {
         } catch {
             lastMessage = "Could not save config: \(error.localizedDescription)"
         }
+    }
+
+    func showAddFolderSheet() {
+        isShowingAddFolderSheet = true
+        focusedFolderID = nil
+    }
+
+    func focusFolder(id: UUID) {
+        focusedFolderID = id
     }
 
     @discardableResult

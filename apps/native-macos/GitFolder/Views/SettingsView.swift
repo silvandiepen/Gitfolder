@@ -1,8 +1,8 @@
+import AppKit
 import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var appModel
-    @State private var isAddingFolder = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -95,8 +95,10 @@ struct SettingsView: View {
                         }
                     }
 
-                    Button("Add Folder…") {
-                        isAddingFolder = true
+                    Button {
+                        appModel.showAddFolderSheet()
+                    } label: {
+                        Label("Add Folder…", systemImage: "folder.badge.plus")
                     }
                 }
 
@@ -109,8 +111,17 @@ struct SettingsView: View {
         }
         .padding()
         .frame(minWidth: 640, minHeight: 560)
-        .sheet(isPresented: $isAddingFolder) {
-            AddFolderSheet(isPresented: $isAddingFolder)
+        .onAppear {
+            appModel.loadIfNeeded()
+        }
+        .sheet(isPresented: Binding(
+            get: { appModel.isShowingAddFolderSheet },
+            set: { appModel.isShowingAddFolderSheet = $0 }
+        )) {
+            AddFolderSheet(isPresented: Binding(
+                get: { appModel.isShowingAddFolderSheet },
+                set: { appModel.isShowingAddFolderSheet = $0 }
+            ))
                 .environment(appModel)
         }
     }
@@ -142,9 +153,23 @@ private struct FolderSettingsRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(draft.name)
-                        .font(.headline)
+                Image(systemName: statusSymbol)
+                    .font(.title3)
+                    .foregroundStyle(statusColor(for: currentFolder.lastStatus))
+                    .frame(width: 28)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(draft.name)
+                            .font(.headline)
+                        if !draft.enabled {
+                            Text("Paused")
+                                .font(.caption2.weight(.semibold))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(.secondary.opacity(0.12))
+                                .clipShape(Capsule())
+                        }
+                    }
                     Text(draft.localPath)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -203,7 +228,30 @@ private struct FolderSettingsRow: View {
                 }
             }
         }
-        .padding(.vertical, 6)
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(isFocused ? Color.accentColor.opacity(0.10) : Color.secondary.opacity(0.07))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(isFocused ? Color.accentColor.opacity(0.55) : Color.secondary.opacity(0.12), lineWidth: 1)
+        )
+        .contextMenu {
+            Button("Sync Now") {
+                appModel.updateFolder(draft)
+                appModel.syncNow(folderID: draft.id)
+            }
+            Button("Open Folder") {
+                NSWorkspace.shared.open(URL(fileURLWithPath: draft.localPath))
+            }
+            Button("Reveal in Finder") {
+                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: draft.localPath)])
+            }
+            Button(draft.enabled ? "Pause Folder" : "Resume Folder") {
+                appModel.toggleFolder(id: draft.id)
+            }
+        }
         .onChange(of: appModel.config.folders) { _, folders in
             if let updated = folders.first(where: { $0.id == draft.id }), updated.updatedAt != draft.updatedAt {
                 draft = updated
@@ -212,14 +260,32 @@ private struct FolderSettingsRow: View {
     }
 
     private var statusBadge: some View {
-        let current = appModel.config.folders.first(where: { $0.id == draft.id }) ?? draft
-        return Text(statusText(for: current))
+        Text(statusText(for: currentFolder))
             .font(.caption.weight(.semibold))
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(statusColor(for: current.lastStatus).opacity(0.16))
-            .foregroundStyle(statusColor(for: current.lastStatus))
+            .background(statusColor(for: currentFolder.lastStatus).opacity(0.16))
+            .foregroundStyle(statusColor(for: currentFolder.lastStatus))
             .clipShape(Capsule())
+    }
+
+    private var currentFolder: SyncedFolder {
+        appModel.config.folders.first(where: { $0.id == draft.id }) ?? draft
+    }
+
+    private var isFocused: Bool {
+        appModel.focusedFolderID == draft.id
+    }
+
+    private var statusSymbol: String {
+        switch currentFolder.lastStatus {
+        case .synced: return "checkmark.circle.fill"
+        case .syncing, .checking: return "arrow.triangle.2.circlepath.circle.fill"
+        case .paused: return "pause.circle.fill"
+        case .error, .conflict: return "exclamationmark.triangle.fill"
+        case .waitingForConnection, .needsAttention: return "exclamationmark.circle.fill"
+        case .idle: return currentFolder.enabled ? "folder" : "pause.circle.fill"
+        }
     }
 
     private var latestError: UserFacingError? {

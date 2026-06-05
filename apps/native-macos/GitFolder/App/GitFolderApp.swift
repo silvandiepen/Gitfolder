@@ -2,12 +2,24 @@ import SwiftUI
 
 @main
 struct GitFolderApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @State private var appModel = AppModel()
 
     var body: some Scene {
+        MenuBarExtra {
+            MenuBarView()
+                .environment(appModel)
+        } label: {
+            Image("MenuBarIcon")
+                .renderingMode(.template)
+        }
+        .menuBarExtraStyle(.menu)
+
         Settings {
             SettingsView()
-                .environment(appDelegate.appModel)
+                .environment(appModel)
+                .onAppear {
+                    appModel.loadIfNeeded()
+                }
         }
     }
 }
