@@ -9,6 +9,12 @@
   --color-bg: #f5f3ed;
   --color-surface: #ffffff;
   --color-surface-raised: #f9f8f4;
+  --color-background: var(--color-bg);
+  --color-background-alt: var(--color-surface-raised);
+  --color-foreground: var(--color-text-primary);
+  --color-foreground-muted: var(--color-text-secondary);
+  --color-light: #ffffff;
+  --color-dark: #0f1117;
 
   // ── Brand colours ─────────────────────────────────────────────────────
   --color-primary: #2d6a4f;

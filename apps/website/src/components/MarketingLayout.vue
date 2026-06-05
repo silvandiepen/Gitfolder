@@ -1,38 +1,66 @@
 <script setup lang="ts">
 /**
  * @component MarketingLayout
- * Shared layout for all marketing pages. Frosted header + content + footer.
- * Matches Kod's MarketingLayout pattern.
+ * Shared layout for all marketing pages. Uses @sil/ui PillHeader and the supplied GitFolder line mark.
  */
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { PillHeader } from '@sil/ui'
+import type { PillHeaderAction, PillHeaderNavItem } from '@sil/ui'
+import GitFolderMark from './GitFolderMark.vue'
 
 const route = useRoute()
+const isDark = ref(true)
+
+const navItems: PillHeaderNavItem[] = [
+  { label: 'Docs', to: '/docs', exact: true },
+  { label: 'Privacy', to: '/privacy', exact: true },
+  { label: 'Support', to: '/support', exact: true },
+  { label: 'GitHub', href: 'https://github.com/silvandiepen/Gitfolder', external: true },
+]
+
+const actions = computed<PillHeaderAction[]>(() => [
+  {
+    label: isDark.value ? 'Switch to light mode' : 'Switch to dark mode',
+    icon: isDark.value ? 'weather/sun-light-mode' : 'weather/moon-dark-mode',
+    iconOnly: true,
+    handler: toggleColorMode,
+  },
+])
+
+function toggleColorMode() {
+  isDark.value = !isDark.value
+  const mode = isDark.value ? 'dark' : 'light'
+  document.documentElement.setAttribute('data-color-mode', mode)
+  localStorage.setItem('gitfolder-color-mode', mode)
+}
+
+onMounted(() => {
+  const storedMode = localStorage.getItem('gitfolder-color-mode')
+  const currentMode = storedMode || document.documentElement.getAttribute('data-color-mode') || 'dark'
+  isDark.value = currentMode === 'dark'
+  document.documentElement.setAttribute('data-color-mode', currentMode)
+})
 </script>
 
 <template>
   <div class="mlayout">
-    <header class="mlayout__header">
-      <div class="mlayout__container mlayout__header-inner">
-        <router-link to="/" class="mlayout__brand">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-            <path d="M2 17l10 5 10-5"/>
-            <path d="M2 12l10 5 10-5"/>
-          </svg>
-          <span class="mlayout__brand-text">GitFolder</span>
-        </router-link>
-        <nav class="mlayout__nav">
-          <router-link to="/docs">Docs</router-link>
-          <router-link to="/privacy">Privacy</router-link>
-          <router-link to="/support">Support</router-link>
-          <a href="https://github.com/silvandiepen/Gitfolder" target="_blank" rel="noopener">GitHub</a>
-          <button class="mlayout__color-toggle" @click="toggleColorMode" :aria-label="isDark ? 'Switch to light mode' : 'Switch to dark mode'">
-            <svg v-if="isDark" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-            <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-          </button>
-        </nav>
-      </div>
-    </header>
+    <PillHeader
+      :nav-items="navItems"
+      :actions="actions"
+      :current-path="route.path"
+      brand-to="/"
+      brand-suffix="GitFolder"
+      brand-aria-label="GitFolder — Home"
+      color-mode="auto"
+      menu-icon="ui/menu"
+      close-icon="ui/multiply-m"
+      class="mlayout__pill-header"
+    >
+      <template #brand-mark>
+        <GitFolderMark class="mlayout__brand-mark" :size="24" title="GitFolder" />
+      </template>
+    </PillHeader>
 
     <main class="mlayout__main">
       <slot />
@@ -41,14 +69,10 @@ const route = useRoute()
     <footer class="mlayout__footer">
       <div class="mlayout__container mlayout__footer-inner">
         <router-link to="/" class="mlayout__footer-brand">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-            <path d="M2 17l10 5 10-5"/>
-            <path d="M2 12l10 5 10-5"/>
-          </svg>
+          <GitFolderMark class="mlayout__footer-mark" :size="18" title="GitFolder" />
           <span>GitFolder</span>
         </router-link>
-        <nav class="mlayout__footer-links">
+        <nav class="mlayout__footer-links" aria-label="Footer">
           <router-link to="/docs">Docs</router-link>
           <router-link to="/privacy">Privacy</router-link>
           <router-link to="/support">Support</router-link>
@@ -60,30 +84,7 @@ const route = useRoute()
   </div>
 </template>
 
-<script lang="ts">
-import { defineComponent } from 'vue'
-
-export default defineComponent({
-  data() {
-    return {
-      isDark: true,
-    }
-  },
-  mounted() {
-    this.isDark = document.documentElement.getAttribute('data-color-mode') === 'dark'
-  },
-  methods: {
-    toggleColorMode() {
-      this.isDark = !this.isDark
-      const mode = this.isDark ? 'dark' : 'light'
-      document.documentElement.setAttribute('data-color-mode', mode)
-      localStorage.setItem('gitfolder-color-mode', mode)
-    },
-  },
-})
-</script>
-
-<style lang="scss" scoped>
+<style lang="scss">
 .mlayout {
   min-height: 100vh;
   background: var(--color-bg);
@@ -97,79 +98,32 @@ export default defineComponent({
     width: 100%;
   }
 
-  @include e(header) {
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    background: color-mix(in srgb, var(--color-surface), transparent 10%);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border-bottom: 1px solid var(--color-border-light);
-  }
-
-  @include e(header-inner) {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    height: 64px;
-  }
-
-  @include e(brand) {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    text-decoration: none;
+  &__pill-header {
+    --pill-header-position: fixed;
+    --pill-header-padding: 14px clamp(16px, 4vw, 32px) 0;
+    --pill-header-radius: 999px;
+    --pill-header-brand-gap: 10px;
     color: var(--color-text-primary);
   }
 
-  @include e(brand-text) {
-    font-weight: var(--font-weight-bold);
-    font-size: var(--font-size-md);
+  &__brand-mark,
+  &__footer-mark {
+    color: currentColor;
+    flex: 0 0 auto;
   }
 
-  @include e(nav) {
-    display: flex;
-    align-items: center;
-    gap: 28px;
-
-    a {
-      font-size: var(--font-size-sm);
-      font-weight: var(--font-weight-medium);
-      color: var(--color-text-secondary);
-      text-decoration: none;
-      transition: color var(--transition-fast);
-      padding: 4px 0;
-      &:hover { color: var(--color-text-primary); }
-      &.router-link-active { color: var(--color-accent); }
-    }
-  }
-
-  @include e(color-toggle) {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    color: var(--color-text-secondary);
-    transition: all var(--transition-fast);
-    &:hover {
-      color: var(--color-text-primary);
-      background: var(--color-surface-raised);
-    }
-  }
-
-  @include e(main) {
+  &__main {
     flex: 1;
+    padding-top: 76px;
   }
 
-  @include e(footer) {
+  &__footer {
     padding: 32px 0;
     border-top: 1px solid var(--color-border-light);
     margin-top: auto;
   }
 
-  @include e(footer-inner) {
+  &__footer-inner {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -177,7 +131,7 @@ export default defineComponent({
     gap: 16px;
   }
 
-  @include e(footer-brand) {
+  &__footer-brand {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -187,7 +141,7 @@ export default defineComponent({
     color: var(--color-text-primary);
   }
 
-  @include e(footer-links) {
+  &__footer-links {
     display: flex;
     align-items: center;
     gap: 24px;
@@ -197,13 +151,34 @@ export default defineComponent({
       color: var(--color-text-tertiary);
       text-decoration: none;
       transition: color var(--transition-fast);
-      &:hover { color: var(--color-text-primary); }
+
+      &:hover {
+        color: var(--color-text-primary);
+      }
     }
   }
 
-  @include e(footer-copy) {
+  &__footer-copy {
     font-size: var(--font-size-xs);
     color: var(--color-text-tertiary);
+  }
+}
+
+.pill-header__action--icon-only .pill-header__action-label,
+.pill-header__action[aria-label*="Switch"] .pill-header__action-label {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .mlayout {
+    &__main {
+      padding-top: 84px;
+    }
+
+    &__footer-inner {
+      align-items: flex-start;
+      flex-direction: column;
+    }
   }
 }
 </style>

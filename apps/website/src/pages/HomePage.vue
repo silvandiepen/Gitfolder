@@ -3,6 +3,7 @@
  * @view HomePage
  * Landing page for GitFolder. Hero + features + CTA, matching Kod pattern.
  */
+import GitFolderMark from '@/components/GitFolderMark.vue'
 import MarketingLayout from '@/components/MarketingLayout.vue'
 
 const features = [
@@ -45,17 +46,26 @@ const features = [
       <!-- Hero -->
       <section class="landing__hero">
         <div class="landing__container landing__hero-content">
-          <p class="landing__eyebrow">macOS menu bar utility</p>
-          <h1 class="landing__hero-title">Automatic version history for your folders.</h1>
-          <p class="landing__hero-subtitle">
-            GitFolder watches selected folders on your Mac and creates quiet GitHub snapshot commits when files change. No cloud service. No account. Just local-first versioning.
-          </p>
-          <div class="landing__hero-actions">
-            <a href="https://apps.apple.com" class="landing__btn-pill">
-              Coming to the Mac App Store
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-            </a>
-            <router-link to="/docs" class="landing__btn-outline">Read the docs</router-link>
+          <div class="landing__hero-copy">
+            <p class="landing__eyebrow">macOS menu bar utility</p>
+            <h1 class="landing__hero-title">Automatic version history for your folders.</h1>
+            <p class="landing__hero-subtitle">
+              GitFolder watches selected folders on your Mac and creates quiet GitHub snapshot commits when files change. No cloud service. No account. Just local-first versioning.
+            </p>
+            <div class="landing__hero-actions">
+              <a href="https://apps.apple.com" class="landing__btn-pill">
+                Coming to the Mac App Store
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </a>
+              <router-link to="/docs" class="landing__btn-outline">Read the docs</router-link>
+            </div>
+          </div>
+
+          <div class="landing__hero-art" aria-hidden="true">
+            <GitFolderMark class="landing__hero-mark" :size="224" title="GitFolder line artwork" />
+            <div class="landing__hero-line landing__hero-line--top" />
+            <div class="landing__hero-line landing__hero-line--middle" />
+            <div class="landing__hero-line landing__hero-line--bottom" />
           </div>
         </div>
       </section>
@@ -98,7 +108,7 @@ const features = [
   </MarketingLayout>
 </template>
 
-<style lang="scss" scoped>
+<style lang="scss">
 .landing {
   &__container {
     max-width: 1120px;
@@ -158,7 +168,74 @@ const features = [
   }
 
   @include e(hero-content) {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(260px, 0.9fr);
+    gap: 48px;
+    align-items: center;
+
+    @include tablet {
+      grid-template-columns: 1fr;
+      gap: 36px;
+    }
+  }
+
+  @include e(hero-copy) {
     max-width: 640px;
+  }
+
+  @include e(hero-art) {
+    position: relative;
+    min-height: 300px;
+    display: grid;
+    place-items: center;
+    color: var(--color-accent);
+
+    &::before {
+      content: '';
+      position: absolute;
+      inset: 24px;
+      border-radius: 32px;
+      background:
+        radial-gradient(circle at 28% 22%, color-mix(in srgb, var(--color-accent) 18%, transparent), transparent 34%),
+        linear-gradient(135deg, color-mix(in srgb, var(--color-accent) 14%, var(--color-surface)), var(--color-surface));
+      border: 1px solid var(--color-border-light);
+      box-shadow: var(--shadow-lg);
+    }
+  }
+
+  @include e(hero-mark) {
+    position: relative;
+    z-index: 1;
+    color: var(--color-text-primary);
+    opacity: 0.88;
+    filter: drop-shadow(0 16px 32px rgba(0, 0, 0, 0.16));
+  }
+
+  @include e(hero-line) {
+    position: absolute;
+    z-index: 0;
+    height: 2px;
+    border-radius: 999px;
+    background: currentColor;
+    opacity: 0.16;
+
+    @include m(top) {
+      width: 58%;
+      top: 78px;
+      right: 0;
+    }
+
+    @include m(middle) {
+      width: 72%;
+      left: 12px;
+      top: 50%;
+    }
+
+    @include m(bottom) {
+      width: 52%;
+      right: 36px;
+      bottom: 72px;
+    }
   }
 
   @include e(eyebrow) {
