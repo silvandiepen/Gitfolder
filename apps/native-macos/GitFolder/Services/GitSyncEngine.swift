@@ -1,4 +1,6 @@
 import Foundation
+import GitPontCore
+import GitPontGitCLI
 
 struct FolderSyncOutcome: Equatable, Sendable {
     var folder: SyncedFolder
@@ -10,24 +12,26 @@ struct FolderSyncOutcome: Equatable, Sendable {
 struct GitSyncOptions: Equatable, Sendable {
     var gitAuthorName: String?
     var gitAuthorEmail: String?
+    var githubToken: String?
     var sshPrivateKeyPath: String?
     var sshPrivateKeyBookmarkData: Data?
 
     static let defaults = GitSyncOptions(
         gitAuthorName: nil,
         gitAuthorEmail: nil,
+        githubToken: nil,
         sshPrivateKeyPath: nil,
         sshPrivateKeyBookmarkData: nil
     )
 }
 
 struct GitSyncEngine: Sendable {
-    private let gitRunner: GitRunner
+    private let gitRunner: any GitRunning
     private let folderAccessService: FolderAccessService
     private let now: @Sendable () -> Date
 
     init(
-        gitRunner: GitRunner = GitRunner(),
+        gitRunner: any GitRunning = GitRunner(),
         folderAccessService: FolderAccessService = FolderAccessService(),
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
@@ -38,11 +42,54 @@ struct GitSyncEngine: Sendable {
 
     func sync(_ folder: SyncedFolder, options: GitSyncOptions = .defaults) async throws -> FolderSyncOutcome {
         try await Task.detached(priority: .utility) {
-            try self.syncSynchronously(folder, options: options)
+            try await self.syncSynchronously(folder, options: options)
         }.value
     }
 
-    private func syncSynchronously(_ folder: SyncedFolder, options: GitSyncOptions) throws -> FolderSyncOutcome {
+    func testGitHubAccess(repoUrl: String, authMode: AuthMode, options: GitSyncOptions = .defaults) async throws {
+        try await Task.detached(priority: .utility) {
+            let trimmedRepoUrl = repoUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedRepoUrl.isEmpty else {
+                throw GitSyncError.missingRepositoryURL
+            }
+            let folder = SyncedFolder.create(
+                name: "Access Test",
+                localPath: FileManager.default.temporaryDirectory.path,
+                bookmarkData: nil,
+                repoUrl: trimmedRepoUrl,
+                authMode: authMode
+            )
+            let authContext = try await self.gitAuthContext(for: folder, options: options, sshKeyURL: nil)
+            let result = self.git(authContext.argumentsPrefix + ["ls-remote", "--heads", trimmedRepoUrl], in: FileManager.default.temporaryDirectory, timeoutSeconds: 45, environment: authContext.environment)
+            guard result.succeeded else {
+                throw GitSyncError.githubAccessFailed(result.combinedOutput)
+            }
+        }.value
+    }
+
+    func listRemoteBranches(repoUrl: String, authMode: AuthMode, options: GitSyncOptions = .defaults) async throws -> [String] {
+        try await Task.detached(priority: .utility) {
+            let trimmedRepoUrl = repoUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedRepoUrl.isEmpty else {
+                throw GitSyncError.missingRepositoryURL
+            }
+            let folder = SyncedFolder.create(
+                name: "Branch List",
+                localPath: FileManager.default.temporaryDirectory.path,
+                bookmarkData: nil,
+                repoUrl: trimmedRepoUrl,
+                authMode: authMode
+            )
+            let authContext = try await self.gitAuthContext(for: folder, options: options, sshKeyURL: nil)
+            let result = self.git(authContext.argumentsPrefix + ["ls-remote", "--heads", trimmedRepoUrl], in: FileManager.default.temporaryDirectory, timeoutSeconds: 45, environment: authContext.environment)
+            guard result.succeeded else {
+                throw GitSyncError.githubAccessFailed(result.combinedOutput)
+            }
+            return self.branchNames(from: result.standardOutput)
+        }.value
+    }
+
+    private func syncSynchronously(_ folder: SyncedFolder, options: GitSyncOptions) async throws -> FolderSyncOutcome {
         guard folder.enabled else {
             return FolderSyncOutcome(folder: folder.marked(status: .paused, message: nil, at: now()), changed: false, pushed: false, message: "Folder is paused")
         }
@@ -51,11 +98,11 @@ struct GitSyncEngine: Sendable {
             throw GitSyncError.missingRepositoryURL
         }
 
-        return try folderAccessService.withSecurityScopedAccess(for: folder) { folderURL in
-            let sshKeyAccess = try startSSHKeyAccess(options)
-            defer { sshKeyAccess.stop() }
-            let environment = gitEnvironment(sshKeyURL: sshKeyAccess.url)
+        let sshKeyAccess = try startSSHKeyAccess(options)
+        defer { sshKeyAccess.stop() }
+        let authContext = try await gitAuthContext(for: folder, options: options, sshKeyURL: sshKeyAccess.url)
 
+        return try folderAccessService.withSecurityScopedAccess(for: folder) { folderURL in
             guard FileManager.default.fileExists(atPath: folderURL.path) else {
                 throw GitSyncError.folderMissing(folderURL.path)
             }
@@ -66,11 +113,11 @@ struct GitSyncEngine: Sendable {
             updatedFolder.lastSyncAt = now()
             updatedFolder.lastError = nil
 
-            try ensureRepository(in: folderURL, folder: updatedFolder, options: options, environment: environment)
-            try ensureRemote(in: folderURL, repoUrl: updatedFolder.repoUrl, environment: environment)
-            try ensureBranch(in: folderURL, branch: updatedFolder.branch, environment: environment)
+            try ensureRepository(in: folderURL, folder: updatedFolder, options: options, environment: authContext.environment)
+            try ensureRemote(in: folderURL, repoUrl: updatedFolder.repoUrl, environment: authContext.environment)
+            try ensureBranch(in: folderURL, branch: updatedFolder.branch, environment: authContext.environment)
 
-            let status = try requireSuccess(git(["status", "--porcelain"], in: folderURL, environment: environment), failure: .gitStatusFailed())
+            let status = try requireSuccess(git(["status", "--porcelain"], in: folderURL, environment: authContext.environment), failure: .gitStatusFailed())
             guard !status.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 updatedFolder.lastSuccessfulSyncAt = now()
                 updatedFolder.updatedAt = now()
@@ -78,10 +125,10 @@ struct GitSyncEngine: Sendable {
                 return FolderSyncOutcome(folder: updatedFolder, changed: false, pushed: false, message: "No changes")
             }
 
-            _ = try requireSuccess(git(["add", "-A"], in: folderURL, environment: environment), failure: .gitAddFailed())
+            _ = try requireSuccess(git(["add", "-A"], in: folderURL, environment: authContext.environment), failure: .gitAddFailed())
 
             let commitMessage = SnapshotCommitMessage.make(date: now())
-            let commit = git(["commit", "-m", commitMessage], in: folderURL, timeoutSeconds: 60, environment: environment)
+            let commit = git(["commit", "-m", commitMessage], in: folderURL, timeoutSeconds: 60, environment: authContext.environment)
             if !commit.succeeded {
                 if commit.combinedOutput.localizedCaseInsensitiveContains("nothing to commit") {
                     updatedFolder.lastSuccessfulSyncAt = now()
@@ -92,12 +139,12 @@ struct GitSyncEngine: Sendable {
                 throw GitSyncError.gitCommitFailed(commit.combinedOutput)
             }
 
-            let pull = git(["pull", "--rebase", "origin", updatedFolder.branch], in: folderURL, timeoutSeconds: 120, environment: environment)
+            let pull = git(authContext.argumentsPrefix + ["pull", "--rebase", "origin", updatedFolder.branch], in: folderURL, timeoutSeconds: 120, environment: authContext.environment)
             if !pull.succeeded && !isMissingUpstreamOutput(pull.combinedOutput) {
                 throw GitSyncError.pullRebaseFailed(pull.combinedOutput)
             }
 
-            let push = git(["push", "-u", "origin", updatedFolder.branch], in: folderURL, timeoutSeconds: 180, environment: environment)
+            let push = git(authContext.argumentsPrefix + ["push", "-u", "origin", updatedFolder.branch], in: folderURL, timeoutSeconds: 180, environment: authContext.environment)
             guard push.succeeded else {
                 throw GitSyncError.gitPushFailed(push.combinedOutput)
             }
@@ -190,6 +237,18 @@ struct GitSyncEngine: Sendable {
         ]
     }
 
+    private func gitAuthContext(for folder: SyncedFolder, options: GitSyncOptions, sshKeyURL: URL?) async throws -> GitAuthContext {
+        switch folder.authModeValue {
+        case .githubToken:
+            guard let token = nonEmpty(options.githubToken) else {
+                throw GitSyncError.missingGitHubToken
+            }
+            return try await .githubToken(token, repoUrl: folder.repoUrl)
+        case .ssh:
+            return GitAuthContext(argumentsPrefix: [], environment: gitEnvironment(sshKeyURL: sshKeyURL))
+        }
+    }
+
     private func nonEmpty(_ value: String?) -> String? {
         guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
         return trimmed
@@ -216,10 +275,23 @@ struct GitSyncEngine: Sendable {
             || output.localizedCaseInsensitiveContains("fatal: couldn't find remote ref")
             || output.localizedCaseInsensitiveContains("no such ref was fetched")
     }
+
+    private func branchNames(from lsRemoteOutput: String) -> [String] {
+        let prefix = "refs/heads/"
+        return lsRemoteOutput
+            .split(whereSeparator: \.isNewline)
+            .compactMap { line -> String? in
+                guard let ref = line.split(separator: "\t").last else { return nil }
+                guard ref.hasPrefix(prefix) else { return nil }
+                return String(ref.dropFirst(prefix.count))
+            }
+            .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
 }
 
 enum GitSyncError: LocalizedError, Equatable, Sendable {
     case missingRepositoryURL
+    case missingGitHubToken
     case folderMissing(String)
     case gitInitFailed(String = "")
     case gitConfigFailed(String)
@@ -230,11 +302,14 @@ enum GitSyncError: LocalizedError, Equatable, Sendable {
     case gitCommitFailed(String)
     case pullRebaseFailed(String)
     case gitPushFailed(String)
+    case githubAccessFailed(String)
 
     var errorDescription: String? {
         switch self {
         case .missingRepositoryURL:
             return "Add a GitHub repository URL before syncing."
+        case .missingGitHubToken:
+            return "Add a GitHub token in Settings before syncing this folder."
         case .folderMissing(let path):
             return "Folder not found: \(path)"
         case .gitInitFailed(let details):
@@ -255,12 +330,15 @@ enum GitSyncError: LocalizedError, Equatable, Sendable {
             return "Could not safely pull remote changes before pushing.\(suffix(details))"
         case .gitPushFailed(let details):
             return "Could not push snapshot to GitHub.\(suffix(details))"
+        case .githubAccessFailed(let details):
+            return "Could not access the GitHub repository.\(suffix(details))"
         }
     }
 
     var code: String {
         switch self {
         case .missingRepositoryURL: return "missing_repository_url"
+        case .missingGitHubToken: return "missing_github_token"
         case .folderMissing: return "folder_missing"
         case .gitInitFailed: return "git_init_failed"
         case .gitConfigFailed: return "git_config_failed"
@@ -271,6 +349,7 @@ enum GitSyncError: LocalizedError, Equatable, Sendable {
         case .gitCommitFailed: return "git_commit_failed"
         case .pullRebaseFailed: return "pull_rebase_failed"
         case .gitPushFailed: return "git_push_failed"
+        case .githubAccessFailed: return "github_access_failed"
         }
     }
 
@@ -287,11 +366,13 @@ enum GitSyncError: LocalizedError, Equatable, Sendable {
     var recoverySuggestion: String? {
         switch self {
         case .missingRepositoryURL:
-            return "Open Settings and add a GitHub SSH repository URL for this folder."
+            return "Open Settings and add a GitHub repository URL for this folder."
+        case .missingGitHubToken:
+            return "Open Settings and paste a fine-grained GitHub token."
         case .gitConfigFailed:
             return "Run `git config --global user.name` and `git config --global user.email`, then try again."
-        case .gitPushFailed, .pullRebaseFailed, .gitRemoteFailed:
-            return "Check that the repository exists and your GitHub SSH key works in Terminal."
+        case .gitPushFailed, .pullRebaseFailed, .gitRemoteFailed, .githubAccessFailed:
+            return "Check that the repository exists and your GitHub access works."
         case .folderMissing:
             return "Reconnect or remove this folder in Settings."
         default:
@@ -314,8 +395,45 @@ enum GitSyncError: LocalizedError, Equatable, Sendable {
         case .gitCommitFailed: return .gitCommitFailed(details)
         case .pullRebaseFailed: return .pullRebaseFailed(details)
         case .gitPushFailed: return .gitPushFailed(details)
+        case .githubAccessFailed: return .githubAccessFailed(details)
         default: return self
         }
+    }
+}
+
+struct GitAuthContext: Equatable, Sendable {
+    var argumentsPrefix: [String]
+    var environment: [String: String]
+
+    static func githubToken(_ token: String, repoUrl: String) async throws -> GitAuthContext {
+        guard let remoteURL = URL(string: repoUrl) else {
+            throw GitSyncError.missingRepositoryURL
+        }
+
+        let connectionStore = InMemoryConnectionStore()
+        let credentialStore = InMemoryCredentialStore()
+        let connectionID = "gitfolder-github"
+        let now = Date()
+        let connection = GitConnection(
+            id: connectionID,
+            instance: .github,
+            accountID: "github",
+            accountLogin: "x-access-token",
+            authMethod: .personalAccessToken,
+            createdAt: now,
+            updatedAt: now
+        )
+        await connectionStore.save(connection)
+        await credentialStore.save(GitCredential(accessToken: token), for: connectionID)
+
+        let gitPont = GitPont(
+            providers: [],
+            connectionStore: connectionStore,
+            credentialStore: credentialStore,
+            httpClient: URLSessionHTTPClient()
+        )
+        let context = try await gitPont.gitCredentialContext(forRemoteURL: remoteURL, preferredConnectionID: connectionID)
+        return GitAuthContext(argumentsPrefix: context.argumentsPrefix, environment: context.environment)
     }
 }
 

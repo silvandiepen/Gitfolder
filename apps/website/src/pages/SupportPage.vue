@@ -11,7 +11,7 @@ import MarketingLayout from '@/components/MarketingLayout.vue'
     <div class="support">
       <div class="support__container">
         <h1 class="support__title">Support</h1>
-        <p class="support__intro">GitFolder is a small app — most issues come down to Git or SSH setup. Here's how to diagnose common problems.</p>
+        <p class="support__intro">GitFolder is a small app. Most issues come down to Git, GitHub token access, repository URLs, or folder permissions.</p>
 
         <section class="support__section">
           <h2>Check your setup</h2>
@@ -26,15 +26,15 @@ import MarketingLayout from '@/components/MarketingLayout.vue'
             <div class="support__step">
               <span class="support__step-num">2</span>
               <div>
-                <h4>Test SSH access</h4>
-                <p>Run <code>ssh -T git@github.com</code> in Terminal. You should see your GitHub username in the response.</p>
+                <h4>Test GitHub access</h4>
+                <p>Open GitFolder Settings, paste a fine-grained GitHub token, enter the repository URL, and run Test GitHub Access.</p>
               </div>
             </div>
             <div class="support__step">
               <span class="support__step-num">3</span>
               <div>
                 <h4>Check the repository URL</h4>
-                <p>Make sure the URL in GitFolder matches the SSH URL on your GitHub repository page. It should start with <code>git@github.com:</code>.</p>
+                <p>Make sure the URL in GitFolder matches the HTTPS URL on your GitHub repository page. It should start with <code>https://github.com/</code>. SSH URLs are available under Advanced settings.</p>
               </div>
             </div>
           </div>
@@ -45,7 +45,7 @@ import MarketingLayout from '@/components/MarketingLayout.vue'
           <div class="support__faq">
             <div class="support__faq-item">
               <h4>Folder shows "Error" status</h4>
-              <p>Open Settings → Repositories and check the error message. The most common cause is SSH access. If you're using the Mac App Store version, go to Settings → SSH and select your SSH key explicitly.</p>
+              <p>Open Settings and check the error message. The most common causes are a missing token, a token without repository access, an incorrect repository URL, or a folder permission that needs to be refreshed.</p>
             </div>
             <div class="support__faq-item">
               <h4>Folder shows "Needs attention"</h4>

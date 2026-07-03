@@ -1,16 +1,14 @@
 name: Native macOS
 
 on:
+  pull_request:
+    branches: [main, development]
+  push:
+    branches: [main, development]
   workflow_dispatch:
-    inputs:
-      confirm:
-        description: Type BUILD_MACOS to run the native macOS build
-        required: true
-        type: string
 
 jobs:
   build:
-    if: ${{ inputs.confirm == 'BUILD_MACOS' }}
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v6
@@ -19,7 +17,12 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
         working-directory: apps/native-macos
-      - name: Build app without signing
-        run: |
-          xcodebuild             -project GitFolder.xcodeproj             -scheme GitFolder             -configuration Debug             -destination 'platform=macOS'             CODE_SIGNING_ALLOWED=NO             build
+      - name: Test app without signing
+        run: xcodebuild -project GitFolder.xcodeproj -scheme GitFolder -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO test
+        working-directory: apps/native-macos
+      - name: Build Release without signing
+        run: xcodebuild -project GitFolder.xcodeproj -scheme GitFolder -configuration Release -destination 'generic/platform=macOS' CODE_SIGNING_ALLOWED=NO build
+        working-directory: apps/native-macos
+      - name: Validate archive command shape
+        run: xcodebuild -project GitFolder.xcodeproj -scheme GitFolder -configuration Release -destination 'generic/platform=macOS' CODE_SIGNING_ALLOWED=NO -archivePath build/GitFolder.xcarchive archive
         working-directory: apps/native-macos

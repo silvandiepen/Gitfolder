@@ -14,10 +14,12 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "build": "npm run build --workspaces --if-present",
+    "dev": "npm run site:dev",
     "site:dev": "npm run dev -w apps/website",
     "site:build": "npm run build -w apps/website",
     "core:build": "npm run build -w packages/core",
-    "macos:generate": "cd apps/native-macos && xcodegen generate"
+    "macos:generate": "cd apps/native-macos && xcodegen generate",
+    "macos:archive:app-store": "apps/native-macos/scripts/archive-app-store.sh"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.1",

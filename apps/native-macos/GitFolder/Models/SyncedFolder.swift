@@ -19,6 +19,10 @@ struct SyncedFolder: Codable, Identifiable, Equatable, Sendable {
     var lastStatus: SyncStatus
     var lastError: UserFacingError?
 
+    var authModeValue: AuthMode {
+        AuthMode(rawValue: authMode) ?? .ssh
+    }
+
     var repositoryWebURLString: String {
         Self.webURLString(fromRepositoryURL: repoUrl)
     }
@@ -87,6 +91,7 @@ struct SyncedFolder: Codable, Identifiable, Equatable, Sendable {
         localPath: String,
         bookmarkData: Data?,
         repoUrl: String,
+        authMode: AuthMode = .githubToken,
         branch: String = "main",
         syncIntervalMinutes: Int = 15
     ) -> SyncedFolder {
@@ -98,7 +103,7 @@ struct SyncedFolder: Codable, Identifiable, Equatable, Sendable {
             bookmarkData: bookmarkData,
             repoUrl: repoUrl,
             provider: "github",
-            authMode: "ssh",
+            authMode: authMode.rawValue,
             branch: branch,
             syncIntervalMinutes: syncIntervalMinutes,
             enabled: true,
@@ -110,6 +115,18 @@ struct SyncedFolder: Codable, Identifiable, Equatable, Sendable {
             lastStatus: .idle,
             lastError: nil
         )
+    }
+}
+
+enum AuthMode: String, Codable, CaseIterable, Equatable, Sendable {
+    case githubToken = "github_token"
+    case ssh
+
+    var label: String {
+        switch self {
+        case .githubToken: "GitHub Token"
+        case .ssh: "SSH"
+        }
     }
 }
 

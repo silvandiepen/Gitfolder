@@ -23,8 +23,29 @@ final class ConfigStoreTests: XCTestCase {
 
         XCTAssertEqual(folder.syncIntervalMinutes, 30)
         XCTAssertEqual(folder.branch, "main")
+        XCTAssertEqual(folder.authModeValue, .githubToken)
         XCTAssertEqual(folder.lastStatus, .idle)
         XCTAssertTrue(folder.enabled)
+    }
+
+    func testConfigEncodingDoesNotIncludeGitHubTokenValue() throws {
+        let secret = "github_pat_secret_value"
+        let folder = SyncedFolder.create(
+            name: "Documents",
+            localPath: "/tmp/Documents",
+            bookmarkData: nil,
+            repoUrl: "https://github.com/silvandiepen/documents.git"
+        )
+        let config = GitFolderConfig(schemaVersion: 1, app: .defaults, folders: [folder])
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(config)
+        let json = String(data: data, encoding: .utf8) ?? ""
+
+        XCTAssertTrue(json.contains(AuthMode.githubToken.rawValue))
+        XCTAssertFalse(json.contains(secret))
+        XCTAssertFalse(json.localizedCaseInsensitiveContains("github_pat_"))
     }
 
     func testSyncedFolderCreatesRepositoryWebURLFromSSHURL() {
@@ -81,6 +102,7 @@ final class ConfigStoreTests: XCTestCase {
             localPath: source.path,
             bookmarkData: nil,
             repoUrl: remote.path,
+            authMode: .ssh,
             branch: "main",
             syncIntervalMinutes: 15
         )
@@ -89,6 +111,7 @@ final class ConfigStoreTests: XCTestCase {
         let options = GitSyncOptions(
             gitAuthorName: "GitFolder Test",
             gitAuthorEmail: "gitfolder@example.com",
+            githubToken: nil,
             sshPrivateKeyPath: nil,
             sshPrivateKeyBookmarkData: nil
         )
@@ -109,6 +132,7 @@ final class ConfigStoreTests: XCTestCase {
             localPath: "/tmp/source",
             bookmarkData: nil,
             repoUrl: "",
+            authMode: .ssh,
             branch: "main"
         )
         let engine = GitSyncEngine()
@@ -119,6 +143,82 @@ final class ConfigStoreTests: XCTestCase {
         } catch let error as GitSyncError {
             XCTAssertEqual(error, .missingRepositoryURL)
         }
+    }
+
+    func testSyncRejectsTokenFolderWithoutToken() async throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let folder = SyncedFolder.create(
+            name: "source",
+            localPath: root.path,
+            bookmarkData: nil,
+            repoUrl: "https://github.com/silvandiepen/documents.git",
+            authMode: .githubToken,
+            branch: "main"
+        )
+        let engine = GitSyncEngine()
+
+        do {
+            _ = try await engine.sync(folder)
+            XCTFail("Expected missing GitHub token error")
+        } catch let error as GitSyncError {
+            XCTAssertEqual(error, .missingGitHubToken)
+        }
+    }
+
+    func testTokenAuthCommandConstructionDoesNotPutTokenInArguments() async throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let runner = FakeGitRunner()
+        let engine = GitSyncEngine(gitRunner: runner)
+        let token = "github_pat_secret_value"
+
+        try await engine.testGitHubAccess(
+            repoUrl: "https://github.com/example/repo.git",
+            authMode: .githubToken,
+            options: GitSyncOptions(
+                gitAuthorName: nil,
+                gitAuthorEmail: nil,
+                githubToken: token,
+                sshPrivateKeyPath: nil,
+                sshPrivateKeyBookmarkData: nil
+            )
+        )
+
+        let calls = runner.calls
+        XCTAssertEqual(calls.count, 1)
+        XCTAssertFalse(calls[0].arguments.joined(separator: " ").contains(token))
+        XCTAssertEqual(calls[0].environment["GITPONT_TOKEN"], token)
+        XCTAssertEqual(calls[0].environment["GITPONT_USERNAME"], "x-access-token")
+        XCTAssertEqual(calls[0].environment["GIT_TERMINAL_PROMPT"], "0")
+    }
+
+    func testGitRunnerLaunchFailureIncludesExecutablePath() throws {
+        let missingGitPath = "/tmp/gitfolder-missing-git-\(UUID().uuidString)"
+        let runner = GitRunner(gitExecutableURL: URL(fileURLWithPath: missingGitPath))
+
+        do {
+            _ = try runner.run(["--version"], in: FileManager.default.temporaryDirectory, timeoutSeconds: 1)
+            XCTFail("Expected Git launch failure")
+        } catch {
+            let message = error.localizedDescription
+            XCTAssertTrue(message.contains("Could not launch Git"), message)
+            XCTAssertTrue(message.contains(missingGitPath), message)
+        }
+    }
+
+    func testKeychainServiceStoresReplacesAndDeletesToken() throws {
+        let service = KeychainService(serviceName: "app.hakobs.gitfolder.tests.\(UUID().uuidString)")
+        defer { try? service.deleteGitHubToken() }
+
+        try service.saveGitHubToken("first-token")
+        XCTAssertEqual(try service.loadGitHubToken(), "first-token")
+
+        try service.saveGitHubToken("second-token")
+        XCTAssertEqual(try service.loadGitHubToken(), "second-token")
+
+        try service.deleteGitHubToken()
+        XCTAssertNil(try service.loadGitHubToken())
     }
 
     private func temporaryDirectory() throws -> URL {
@@ -133,5 +233,24 @@ final class ConfigStoreTests: XCTestCase {
         let result = try GitRunner().run(arguments, in: workingDirectory, timeoutSeconds: 60)
         XCTAssertEqual(result.exitCode, 0, result.standardError)
         return result
+    }
+}
+
+private final class FakeGitRunner: GitRunning, @unchecked Sendable {
+    struct Call: Equatable {
+        var arguments: [String]
+        var environment: [String: String]
+    }
+
+    private(set) var calls: [Call] = []
+
+    func run(
+        _ arguments: [String],
+        in workingDirectory: URL,
+        timeoutSeconds: TimeInterval,
+        environment: [String: String]
+    ) throws -> GitCommandResult {
+        calls.append(Call(arguments: arguments, environment: environment))
+        return GitCommandResult(exitCode: 0, standardOutput: "", standardError: "")
     }
 }

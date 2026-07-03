@@ -253,7 +253,7 @@ Xcode target:
 - Platform: macOS
 - Minimum macOS: 14.0 or newer
 - UI: SwiftUI with AppKit `NSStatusItem` bridge
-- Bundle ID: `app.gitfolder.GitFolder` or another final App Store-ready ID
+- Bundle ID: `app.hakobs.gitfolder`
 - Team ID: Sil's Apple team when signing later
 
 Do not commit generated `.xcodeproj`.

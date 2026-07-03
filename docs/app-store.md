@@ -39,7 +39,7 @@ Alternative:
 
 - Productivity
 
-Developer Tools is probably more honest for Phase 1 because the user needs GitHub SSH access and understands repositories.
+Developer Tools is probably more honest for Phase 1 because the user connects GitHub repositories and understands folders as versioned snapshots.
 
 ## App Store copy draft
 
@@ -50,6 +50,47 @@ GitFolder
 ### Subtitle
 
 Automatic Git snapshots for folders
+
+### Keywords
+
+```txt
+git,github,backup,versioning,snapshot,folder,sync,developer
+```
+
+### Category
+
+```txt
+Primary: Developer Tools
+Secondary: Productivity
+```
+
+### Age rating
+
+```txt
+4+
+No objectionable content, user-generated content browsing, commerce, gambling, or unrestricted web access.
+```
+
+### Support URL
+
+```txt
+https://gitfolder.app/support
+```
+
+### Privacy URL
+
+```txt
+https://gitfolder.app/privacy
+```
+
+### Screenshots
+
+Required Mac App Store screenshots should show:
+
+- Menu bar status with configured folders
+- Settings with GitHub Token access test
+- Folder configuration with HTTPS repository URL
+- Sync success state after a snapshot commit
 
 ### Short description
 
@@ -62,7 +103,8 @@ Pick a folder, connect a repository, choose a sync interval, and GitFolder creat
 - One-time €5 purchase
 - No subscription
 - Menu bar utility
-- Uses your existing GitHub SSH setup
+- Uses a GitHub fine-grained token stored in macOS Keychain
+- Supports SSH as an advanced option
 - Automatic snapshot commits
 - Manual Sync Now action
 - Pause all syncing or individual folders
@@ -79,7 +121,9 @@ Phase 1 should be privacy-simple:
 - No app-owned cloud storage
 - No file contents sent to GitFolder servers
 - User-selected folders are read locally
-- File changes are committed and pushed to GitHub repositories configured by the user
+- File changes are committed and pushed directly to GitHub repositories configured by the user
+- GitHub tokens are stored in macOS Keychain, not in GitFolder config JSON
+- GitFolder transmits selected folder contents to the user's configured GitHub repositories for app functionality
 
 Required website pages before App Store submission:
 
@@ -91,7 +135,7 @@ Required website pages before App Store submission:
 The review notes should explain:
 
 ```txt
-GitFolder is a macOS menu bar utility. It requires the user to select a local folder and provide a GitHub SSH repository URL. It uses the system Git installation and the user's existing GitHub SSH credentials to create and push snapshot commits.
+GitFolder is a macOS menu bar utility. It requires the user to select a local folder, provide a GitHub HTTPS repository URL, and paste a fine-grained GitHub token. The token is stored in macOS Keychain and is used only to run Git commands against the user's configured repositories. SSH repository URLs remain available under Advanced settings for users with an existing SSH setup.
 ```
 
 If the app requires Git to be installed, say that clearly in onboarding and App Store copy. If relying on Apple Command Line Tools Git, provide setup guidance when Git is unavailable.

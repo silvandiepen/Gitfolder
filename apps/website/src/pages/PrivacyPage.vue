@@ -11,16 +11,16 @@ import MarketingLayout from '@/components/MarketingLayout.vue'
     <div class="privacy">
       <div class="privacy__container">
         <h1 class="privacy__title">Privacy</h1>
-        <p class="privacy__updated">Last updated: June 2025</p>
+        <p class="privacy__updated">Last updated: June 2026</p>
 
         <section class="privacy__section">
           <h2>No cloud service</h2>
-          <p>GitFolder does not run a cloud sync service. The app reads folders you explicitly select and pushes changes directly to GitHub repositories you configure, using your existing SSH credentials.</p>
+          <p>GitFolder does not run a cloud sync service. The app reads folders you explicitly select and pushes changes directly to GitHub repositories you configure.</p>
         </section>
 
         <section class="privacy__section">
           <h2>No GitFolder account</h2>
-          <p>There is no GitFolder account. No email, no password, no user profile. The app is a local macOS utility that talks to GitHub over SSH.</p>
+          <p>There is no GitFolder account. No email, no password, no user profile. The app is a local macOS utility that talks directly to GitHub.</p>
         </section>
 
         <section class="privacy__section">
@@ -30,12 +30,12 @@ import MarketingLayout from '@/components/MarketingLayout.vue'
 
         <section class="privacy__section">
           <h2>Local data</h2>
-          <p>Configuration (folder paths, repository URLs, sync intervals) is stored locally on your Mac. GitFolder does not phone home with telemetry, analytics, or usage data.</p>
+          <p>Configuration (folder paths, repository URLs, sync intervals) is stored locally on your Mac. GitHub tokens are stored in macOS Keychain, not in GitFolder's config file. GitFolder does not phone home with telemetry, analytics, or usage data.</p>
         </section>
 
         <section class="privacy__section">
           <h2>GitHub data</h2>
-          <p>Your files are stored in your GitHub repositories under your GitHub account and subject to GitHub's privacy policy. GitFolder has no access to your GitHub data beyond pushing commits.</p>
+          <p>Your selected folder contents are transmitted directly from your Mac to the GitHub repositories you configure so GitFolder can create and push snapshot commits. Your files are stored under your GitHub account and subject to GitHub's privacy policy.</p>
         </section>
 
         <section class="privacy__section">

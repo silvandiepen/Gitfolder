@@ -18,5 +18,15 @@ The generated `.xcodeproj` is ignored. Source lives in `GitFolder/`.
 - Local config storage.
 - Native folder picker.
 - Security-scoped bookmarks for selected folders.
+- GitHub HTTPS token auth by default, with token storage in macOS Keychain.
+- Advanced SSH support with optional security-scoped SSH key bookmarks.
 - System Git command runner.
-- Safe sync engine before App Store polish.
+- Sandboxed Mac App Store build settings.
+
+## App Store Archive
+
+```bash
+npm run macos:archive:app-store
+```
+
+The script generates the Xcode project, archives the Release build, and exports with `AppStoreExportOptions.plist`.

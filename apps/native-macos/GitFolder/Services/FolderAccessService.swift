@@ -24,7 +24,18 @@ struct FolderAccessService: Sendable {
     }
 
     func bookmarkData(for url: URL) throws -> Data {
-        try url.bookmarkData(options: [.withSecurityScope], includingResourceValuesForKeys: nil, relativeTo: nil)
+        let didStartAccessing = url.startAccessingSecurityScopedResource()
+        defer {
+            if didStartAccessing {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        do {
+            return try url.bookmarkData(options: [.withSecurityScope], includingResourceValuesForKeys: nil, relativeTo: nil)
+        } catch {
+            throw FolderAccessError.bookmarkFailed(url.path, error.localizedDescription)
+        }
     }
 
     func resolveBookmark(_ data: Data) throws -> URL {
@@ -56,10 +67,13 @@ struct FolderAccessService: Sendable {
 }
 
 enum FolderAccessError: LocalizedError, Sendable {
+    case bookmarkFailed(String, String)
     case staleBookmark
 
     var errorDescription: String? {
         switch self {
+        case .bookmarkFailed(let path, let details):
+            "Could not save access to \(path). \(details)"
         case .staleBookmark:
             "Folder access needs to be refreshed."
         }

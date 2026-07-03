@@ -21,5 +21,6 @@ struct GitFolderApp: App {
                     appModel.loadIfNeeded()
                 }
         }
+        .windowResizability(.contentSize)
     }
 }
