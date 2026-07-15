@@ -5,6 +5,7 @@
  */
 import GitFolderMark from '@/components/GitFolderMark.vue'
 import MarketingLayout from '@/components/MarketingLayout.vue'
+import { appStoreUrl } from '../links'
 
 const features = [
   {
@@ -53,8 +54,8 @@ const features = [
               GitFolder watches selected folders on your Mac and creates quiet GitHub snapshot commits when files change. No cloud service. No account. Just local-first versioning.
             </p>
             <div class="landing__hero-actions">
-              <a href="https://apps.apple.com" class="landing__btn-pill">
-                Coming to the Mac App Store
+              <a :href="appStoreUrl" class="landing__btn-pill" target="_blank" rel="noopener">
+                Download on the Mac App Store
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
               </a>
               <router-link to="/docs" class="landing__btn-outline">Read the docs</router-link>
@@ -100,7 +101,11 @@ const features = [
           <h2 class="landing__cta-title">Version your folders, quietly.</h2>
           <p class="landing__cta-subtitle">A small macOS app that does one thing well.</p>
           <div class="landing__cta-actions">
-            <router-link to="/docs" class="landing__btn-pill landing__btn-pill--lg">Read the docs</router-link>
+            <a :href="appStoreUrl" class="landing__btn-pill landing__btn-pill--lg" target="_blank" rel="noopener">
+              Download on the Mac App Store
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            </a>
+            <router-link to="/docs" class="landing__btn-outline landing__btn-outline--inverse">Read the docs</router-link>
           </div>
         </div>
       </section>
@@ -159,6 +164,16 @@ const features = [
     &:hover {
       border-color: var(--color-accent);
       color: var(--color-text-primary);
+    }
+
+    @include m(inverse) {
+      border-color: rgba(255, 255, 255, 0.38);
+      color: var(--color-text-inverse);
+
+      &:hover {
+        border-color: var(--color-white);
+        color: var(--color-text-inverse);
+      }
     }
   }
 

@@ -5,6 +5,7 @@
  */
 import { ref } from 'vue'
 import MarketingLayout from '@/components/MarketingLayout.vue'
+import { appStoreUrl } from '../links'
 
 const activeSection = ref('getting-started')
 
@@ -55,7 +56,7 @@ function scrollTo(id: string) {
                   <span class="docs__step-num">1</span>
                   <div>
                     <h4>Install GitFolder</h4>
-                    <p>Download GitFolder from the Mac App Store. It lives in your menu bar — no dock icon.</p>
+                    <p><a :href="appStoreUrl" target="_blank" rel="noopener">Download GitFolder from the Mac App Store</a>. It lives in your menu bar — no dock icon.</p>
                   </div>
                 </div>
                 <div class="docs__step">
@@ -83,7 +84,7 @@ function scrollTo(id: string) {
                   <span class="docs__step-num">1</span>
                   <div>
                     <h4>Mac App Store</h4>
-                    <p>Get GitFolder from the Mac App Store. It's a single purchase — no subscription.</p>
+                    <p><a :href="appStoreUrl" target="_blank" rel="noopener">Get GitFolder from the Mac App Store</a>. It's a single purchase — no subscription.</p>
                   </div>
                 </div>
                 <div class="docs__step">

@@ -9,6 +9,7 @@ coverage/
 !.env.example
 *.tgz
 apps/native-macos/*.xcodeproj/
+apps/native-macos/*.xcodeproj alias
 apps/native-macos/DerivedData/
 apps/native-macos/build/
 apps/native-macos/*.xcuserdata/
