@@ -1,4 +1,4 @@
-import { getCardFields } from './card.js'
+import { resolveCardFields } from './card.js'
 import type { EffectiveConfig, ParsedCard } from './types.js'
 
 export interface ValidationResult {
@@ -13,7 +13,7 @@ export interface ValidationResult {
  */
 export function validateCard(config: EffectiveConfig, card: ParsedCard): ValidationResult {
   const errors: string[] = []
-  const f = getCardFields(card)
+  const f = resolveCardFields(card, config.fieldSource)
 
   if (!f.id) errors.push('missing required field: id')
   if (!f.title) errors.push('missing required field: title')

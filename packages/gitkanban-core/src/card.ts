@@ -1,4 +1,5 @@
-import type { CardFields, EffectiveConfig, Lane, ParsedCard } from './types.js'
+import { resolveBodySectionFields } from './bodyfields.js'
+import type { CardFields, EffectiveConfig, FieldSource, Lane, ParsedCard } from './types.js'
 
 /** Read the modelled fields off a parsed card's frontmatter. */
 export function getCardFields(card: ParsedCard): CardFields {
@@ -16,14 +17,25 @@ export function getCardFields(card: ParsedCard): CardFields {
   }
 }
 
+/**
+ * Read a card's fields honouring the board's field source. Defaults to
+ * frontmatter; a `body-section` source reads them from the markdown body instead.
+ */
+export function resolveCardFields(card: ParsedCard, fieldSource?: FieldSource): CardFields {
+  if (fieldSource && fieldSource.mode === 'body-section') {
+    return resolveBodySectionFields(card, fieldSource)
+  }
+  return getCardFields(card)
+}
+
 /** The lane whose `status` matches the given status value, if any. */
 export function laneForStatus(config: EffectiveConfig, status: string): Lane | undefined {
   return config.lanes.find((lane) => lane.status === status)
 }
 
-/** The lane a card belongs to, by its `status` frontmatter. */
+/** The lane a card belongs to, by its resolved `status`. */
 export function laneForCard(config: EffectiveConfig, card: ParsedCard): Lane | undefined {
-  return laneForStatus(config, getCardFields(card).status)
+  return laneForStatus(config, resolveCardFields(card, config.fieldSource).status)
 }
 
 export interface Column {
@@ -46,8 +58,8 @@ function priorityRank(config: EffectiveConfig, priority: string | null): number 
  * This lets rank-key boards and priority-ordered audit boards both sort sanely.
  */
 export function compareCards(config: EffectiveConfig, a: ParsedCard, b: ParsedCard): number {
-  const fa = getCardFields(a)
-  const fb = getCardFields(b)
+  const fa = resolveCardFields(a, config.fieldSource)
+  const fb = resolveCardFields(b, config.fieldSource)
   if (fa.order && fb.order && fa.order !== fb.order) return fa.order < fb.order ? -1 : 1
   const pa = priorityRank(config, fa.priority ?? null)
   const pb = priorityRank(config, fb.priority ?? null)
@@ -72,7 +84,7 @@ export function groupIntoColumns(
 
   const uncategorised: ParsedCard[] = []
   for (const card of cards) {
-    const status = getCardFields(card).status
+    const status = resolveCardFields(card, config.fieldSource).status
     const column = byStatus.get(status)
     if (column) column.cards.push(card)
     else uncategorised.push(card)
