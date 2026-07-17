@@ -1,0 +1,31 @@
+name: GitKanban macOS
+
+on:
+  pull_request:
+    branches: [main, development]
+    paths:
+      - apps/gitkanban-macos/**
+      - swift/GitKit/**
+      - .github/workflows/gitkanban-macos.yml
+  push:
+    branches: [main, development]
+    paths:
+      - apps/gitkanban-macos/**
+      - swift/GitKit/**
+      - .github/workflows/gitkanban-macos.yml
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: apps/gitkanban-macos
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: xcodegen generate
+      - name: Build without signing
+        run: xcodebuild -project GitKanban.xcodeproj -scheme GitKanban -configuration Debug -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO build
