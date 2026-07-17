@@ -1,51 +1,61 @@
-# GitFolder
+# GitKit
 
-GitFolder is a small macOS menu bar app that automatically versions selected folders with GitHub.
+**A monorepo for git-backed apps.** GitKit houses the apps that make git a quiet,
+first-class backend for everyday work — and the shared engine they run on.
 
-Choose a folder, connect it to a repository, set a sync interval, and GitFolder creates quiet snapshot commits whenever files change.
+| App | What it is | Status |
+|---|---|---|
+| **GitFolder** | macOS menu-bar app that auto-versions selected folders to GitHub | Shipping (App Store) |
+| **GitKanban** | macOS/iOS kanban board backed by a git repo of markdown files | In development |
 
-The goal is to make a normal folder feel versioned by default without requiring the user to manually use Git.
+Both are local-first, own-your-data, no-server apps that treat a git repository as the
+source of truth. They share the same git plumbing, so it lives in one repo.
 
-## Product idea
+## Repository layout
 
-GitFolder runs in the macOS status bar. It keeps watching configured folders in the background and periodically checks whether anything changed. When a folder has changes, GitFolder creates a snapshot commit and pushes it to GitHub.
+```txt
+apps/
+  native-macos/       GitFolder — macOS menu-bar app (SwiftUI/AppKit, XcodeGen)
+  gitkanban-macos/    GitKanban — macOS board app (scaffold)
+  website/            Marketing/docs site (Vue 3 + Vite)
+packages/
+  core/               @gitfolder/core — GitFolder's TypeScript contract
+  gitkanban-core/     @gitkit/gitkanban-core — GitKanban board schema + logic (TS, tested)
+swift/
+  GitKit/             Shared Swift package: the GitEngine and app services (scaffold)
+docs/                 GitFolder product docs
+```
 
-The app is not meant to replace Time Machine, iCloud Drive, Dropbox, or a full backup system. It is focused on automatic version history for selected folders.
+> **Shared engine.** `swift/GitKit` is the shared Swift package both native apps depend on
+> (git engine, config store, keychain, GitHub OAuth, folder access). Extracting GitFolder's
+> inline services into it is tracked work — see the GitKit tasks board.
 
-## Phase 1
+## GitFolder
 
-Phase 1 is a personal macOS utility with a small scope:
+Automatic version history for your folders. A macOS menu-bar app that versions selected
+folders with GitHub on an interval, creating quiet snapshot commits when files change.
 
-- Status bar app only.
-- Connect to GitHub using existing local Git/SSH access.
-- Request file access through macOS folder selection.
-- Add one or more local folders.
-- Connect each folder to a GitHub repository.
-- Check for changes every configured number of minutes.
-- Commit changed files automatically.
-- Pull/rebase before pushing when safe.
-- Push commits to GitHub.
-- Show sync status and basic errors.
-- Allow manual Sync Now.
-- Allow pausing all syncing or pausing a single folder.
+Docs: [product spec](docs/product-spec.md) · [data model](docs/data-model.md) ·
+[implementation plan](docs/implementation-plan.md) · [sync model](docs/sync-model.md) ·
+[App Store & business model](docs/app-store.md) · [phase 1](docs/phase-1.md) ·
+[GitHub access](docs/github-access.md) · [macOS permissions](docs/macos-permissions.md) ·
+[edge cases](docs/edge-cases.md) · [future phases](docs/future-phases.md)
 
-## Documentation
+## GitKanban
 
-- [Product spec](docs/product-spec.md)
-- [Data model](docs/data-model.md)
-- [Implementation plan](docs/implementation-plan.md)
-- [App Store and business model](docs/app-store.md)
-- [Phase 1 scope](docs/phase-1.md)
-- [Sync model](docs/sync-model.md)
-- [GitHub access](docs/github-access.md)
-- [macOS permissions](docs/macos-permissions.md)
-- [Edge cases](docs/edge-cases.md)
-- [Future phases](docs/future-phases.md)
+Your kanban board is a git repo. A native macOS/iOS kanban app backed by markdown files in a
+git repository you own — full history, no server, portable by default. The board schema,
+config inheritance, and card logic live in [`packages/gitkanban-core`](packages/gitkanban-core/),
+and the full plan lives in the `project-assets` repo under `GitKanban/plan/`.
 
-## Working tagline
+The canonical board format is the shared Tasks contract (`project-assets/Tasks/README.md`):
+root/project configuration with inheritance, and markdown cards with YAML frontmatter.
 
-Automatic version history for your folders.
+## Development
 
-## Working description
-
-A macOS menu bar app that automatically versions selected folders with GitHub.
+```bash
+npm install                              # install all workspaces
+npm run check                            # typecheck + test + build everything
+npm run gitkanban:core:test              # test the GitKanban core
+npm run macos:generate                   # regenerate the GitFolder Xcode project
+```
