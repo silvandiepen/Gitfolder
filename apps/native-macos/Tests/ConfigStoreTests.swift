@@ -230,7 +230,7 @@ final class ConfigStoreTests: XCTestCase {
     }
 
     @discardableResult
-    private func runGit(_ arguments: [String], in workingDirectory: URL) throws -> GitCommandResult {
+    private func runGit(_ arguments: [String], in workingDirectory: URL) throws -> GitFolder.GitCommandResult {
         let result = try GitRunner().run(arguments, in: workingDirectory, timeoutSeconds: 60)
         XCTAssertEqual(result.exitCode, 0, result.standardError)
         return result
@@ -250,8 +250,8 @@ private final class FakeGitRunner: GitRunning, @unchecked Sendable {
         in workingDirectory: URL,
         timeoutSeconds: TimeInterval,
         environment: [String: String]
-    ) throws -> GitCommandResult {
+    ) throws -> GitFolder.GitCommandResult {
         calls.append(Call(arguments: arguments, environment: environment))
-        return GitCommandResult(exitCode: 0, standardOutput: "", standardError: "")
+        return GitFolder.GitCommandResult(exitCode: 0, standardOutput: "", standardError: "")
     }
 }
