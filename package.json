@@ -1,7 +1,8 @@
 {
-  "name": "gitfolder-monorepo",
+  "name": "gitkit-monorepo",
   "private": true,
   "type": "module",
+  "description": "GitKit — a monorepo for git-backed apps: GitFolder and GitKanban.",
   "engines": {
     "node": ">=22"
   },
@@ -18,6 +19,8 @@
     "site:dev": "npm run dev -w apps/website",
     "site:build": "npm run build -w apps/website",
     "core:build": "npm run build -w packages/core",
+    "gitkanban:core:build": "npm run build -w packages/gitkanban-core",
+    "gitkanban:core:test": "npm run test -w packages/gitkanban-core",
     "macos:generate": "cd apps/native-macos && xcodegen generate",
     "macos:archive:app-store": "apps/native-macos/scripts/archive-app-store.sh"
   },

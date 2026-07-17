@@ -13,3 +13,9 @@ apps/native-macos/*.xcodeproj alias
 apps/native-macos/DerivedData/
 apps/native-macos/build/
 apps/native-macos/*.xcuserdata/
+apps/gitkanban-macos/*.xcodeproj/
+apps/gitkanban-macos/DerivedData/
+apps/gitkanban-macos/build/
+apps/gitkanban-macos/*.xcuserdata/
+swift/*/.build/
+.swiftpm/

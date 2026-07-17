@@ -1,0 +1,63 @@
+name: GitKanban
+options:
+  bundleIdPrefix: app.hakobs
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "16.0"
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: 1
+    SWIFT_VERSION: "5.0"
+    DEVELOPMENT_TEAM: "38MGF83L2L"
+
+packages:
+  # The shared Swift engine both native apps depend on.
+  GitKit:
+    path: ../../swift/GitKit
+
+targets:
+  GitKanban:
+    type: application
+    platform: macOS
+    sources:
+      - path: GitKanban
+    dependencies:
+      - package: GitKit
+        product: GitKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.hakobs.gitkanban
+        INFOPLIST_FILE: GitKanban/Info.plist
+        CODE_SIGN_ENTITLEMENTS: GitKanban/GitKanban.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_HARDENED_RUNTIME: true
+        CODE_SIGN_STYLE: Automatic
+    entitlements:
+      path: GitKanban/GitKanban.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+        com.apple.security.files.user-selected.read-write: true
+        com.apple.security.files.bookmarks.app-scope: true
+    info:
+      path: GitKanban/Info.plist
+      properties:
+        CFBundleDisplayName: GitKanban
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        LSApplicationCategoryType: public.app-category.developer-tools
+        LSMinimumSystemVersion: "14.0"
+        NSHumanReadableCopyright: "Copyright © Sil van Diepen"
+  GitKanbanTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: GitKanban
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
