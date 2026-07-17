@@ -54,5 +54,7 @@ export function resolveEffectiveConfig(root: BoardConfig, project?: ProjectConfi
     priorities: mergeById<Priority>(root.priorities, project?.priorities),
     types: mergeStrings(root.types, project?.types),
     tags: mergeStrings(root.tags, project?.tags),
+    // A project can override the field source; otherwise inherit the root's.
+    fieldSource: project?.fieldSource ?? root.fieldSource,
   }
 }

@@ -43,6 +43,17 @@ export interface Priority {
   [key: string]: unknown
 }
 
+/**
+ * Where a card's fields come from.
+ * - `frontmatter` (default): fields are YAML frontmatter keys.
+ * - `body-section`: fields are `**Label:** value` lines, preferably inside a named
+ *   markdown section (e.g. `## Status`). This is how the legacy `audit/tasks`
+ *   boards store `State`/`Assignee`, so GitKanban can open them without migration.
+ */
+export type FieldSource =
+  | { mode: 'frontmatter' }
+  | { mode: 'body-section'; section?: string; map: Record<string, string> }
+
 /** Root board configuration (from `Tasks/README.md` frontmatter). */
 export interface BoardConfig {
   lanes: Lane[]
@@ -51,6 +62,7 @@ export interface BoardConfig {
   priorities: Priority[]
   types: string[]
   tags: string[]
+  fieldSource?: FieldSource
   [key: string]: unknown
 }
 
@@ -63,6 +75,7 @@ export interface ProjectConfig {
   priorities?: Priority[]
   types?: string[]
   tags?: string[]
+  fieldSource?: FieldSource
   [key: string]: unknown
 }
 
@@ -75,6 +88,7 @@ export interface EffectiveConfig {
   priorities: Priority[]
   types: string[]
   tags: string[]
+  fieldSource?: FieldSource
 }
 
 /**
