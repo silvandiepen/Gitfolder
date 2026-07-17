@@ -17,6 +17,8 @@ packages:
   git-pont:
     url: https://github.com/silvandiepen/git-pont.git
     branch: codex/initial-git-pont-monorepo
+  GitKit:
+    path: ../../swift/GitKit
 
 targets:
   GitFolder:
@@ -29,6 +31,8 @@ targets:
         product: GitPontCore
       - package: git-pont
         product: GitPontGitCLI
+      - package: GitKit
+        product: GitKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.hakobs.gitfolder

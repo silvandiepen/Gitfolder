@@ -1,4 +1,5 @@
 import Foundation
+import GitKit
 import Observation
 
 @MainActor
@@ -22,8 +23,13 @@ final class AppModel {
     init(
         configStore: ConfigStore = ConfigStore(),
         syncEngine: GitSyncEngine = GitSyncEngine(),
-        keychainService: KeychainService = KeychainService(),
-        gitHubOAuthService: GitHubOAuthService = GitHubOAuthService()
+        keychainService: KeychainService = KeychainService(
+            service: Bundle.main.bundleIdentifier ?? "app.hakobs.gitfolder"
+        ),
+        gitHubOAuthService: GitHubOAuthService = GitHubOAuthService(
+            clientID: "Ov23li24tWFt7qLuLqCe",
+            userAgent: "GitFolder"
+        )
     ) {
         self.configStore = configStore
         self.syncEngine = syncEngine
@@ -45,13 +51,13 @@ final class AppModel {
     func load() {
         do {
             config = try configStore.load()
-            hasGitHubToken = (try? keychainService.loadGitHubToken())?.nilIfEmpty != nil
+            hasGitHubToken = (try? keychainService.load())?.nilIfEmpty != nil
             lastMessage = "Ready"
             startScheduler()
             refreshGitHubLogin()
         } catch {
             config = .empty
-            hasGitHubToken = (try? keychainService.loadGitHubToken())?.nilIfEmpty != nil
+            hasGitHubToken = (try? keychainService.load())?.nilIfEmpty != nil
             lastMessage = "Config reset: \(error.localizedDescription)"
             startScheduler()
             refreshGitHubLogin()
@@ -121,7 +127,7 @@ final class AppModel {
 
     func saveGitHubToken(_ token: String) {
         do {
-            try keychainService.saveGitHubToken(token)
+            try keychainService.save(token)
             hasGitHubToken = token.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty != nil
             gitHubLogin = nil
             lastMessage = hasGitHubToken ? "GitHub token saved" : "GitHub token cleared"
@@ -133,7 +139,7 @@ final class AppModel {
 
     func clearGitHubToken() {
         do {
-            try keychainService.deleteGitHubToken()
+            try keychainService.delete()
             hasGitHubToken = false
             gitHubLogin = nil
             lastMessage = "GitHub token cleared"
@@ -151,7 +157,7 @@ final class AppModel {
     func finishGitHubConnection(_ authorization: GitHubDeviceAuthorization) async -> Bool {
         do {
             let token = try await gitHubOAuthService.waitForAccessToken(authorization: authorization)
-            try keychainService.saveGitHubToken(token)
+            try keychainService.save(token)
             hasGitHubToken = true
             gitHubLogin = try? await gitHubOAuthService.loadViewerLogin(token: token)
             lastMessage = gitHubLogin.map { "GitHub connected as \($0)" } ?? "GitHub connected"
@@ -170,7 +176,7 @@ final class AppModel {
 
         Task {
             do {
-                guard let token = try keychainService.loadGitHubToken()?.nilIfEmpty else { return }
+                guard let token = try keychainService.load()?.nilIfEmpty else { return }
                 let login = try await gitHubOAuthService.loadViewerLogin(token: token)
                 gitHubLogin = login
             } catch {
@@ -185,7 +191,7 @@ final class AppModel {
             if let override = tokenOverride?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty {
                 token = override
             } else {
-                token = try keychainService.loadGitHubToken()
+                token = try keychainService.load()
             }
             try await syncEngine.testGitHubAccess(repoUrl: repoUrl, authMode: authMode, options: syncOptions(githubToken: token))
             lastMessage = "GitHub access verified"
@@ -198,7 +204,7 @@ final class AppModel {
 
     func loadRemoteBranches(repoUrl: String, authMode: AuthMode = .githubToken) async -> [String] {
         do {
-            let token = try keychainService.loadGitHubToken()
+            let token = try keychainService.load()
             let branches = try await syncEngine.listRemoteBranches(repoUrl: repoUrl, authMode: authMode, options: syncOptions(githubToken: token))
             lastMessage = branches.isEmpty ? "No remote branches found" : "Loaded \(branches.count) branches"
             return branches
@@ -355,7 +361,7 @@ final class AppModel {
     }
 
     private func syncOptions(githubToken: String? = nil) -> GitSyncOptions {
-        let token = githubToken ?? (try? keychainService.loadGitHubToken())
+        let token = githubToken ?? (try? keychainService.load())
         return GitSyncOptions(
             gitAuthorName: config.app.gitAuthorName,
             gitAuthorEmail: config.app.gitAuthorEmail,

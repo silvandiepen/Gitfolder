@@ -1,4 +1,5 @@
 import Foundation
+import GitKit
 import XCTest
 @testable import GitFolder
 
@@ -208,17 +209,17 @@ final class ConfigStoreTests: XCTestCase {
     }
 
     func testKeychainServiceStoresReplacesAndDeletesToken() throws {
-        let service = KeychainService(serviceName: "app.hakobs.gitfolder.tests.\(UUID().uuidString)")
-        defer { try? service.deleteGitHubToken() }
+        let service = KeychainService(service: "app.hakobs.gitfolder.tests.\(UUID().uuidString)")
+        defer { try? service.delete() }
 
-        try service.saveGitHubToken("first-token")
-        XCTAssertEqual(try service.loadGitHubToken(), "first-token")
+        try service.save("first-token")
+        XCTAssertEqual(try service.load(), "first-token")
 
-        try service.saveGitHubToken("second-token")
-        XCTAssertEqual(try service.loadGitHubToken(), "second-token")
+        try service.save("second-token")
+        XCTAssertEqual(try service.load(), "second-token")
 
-        try service.deleteGitHubToken()
-        XCTAssertNil(try service.loadGitHubToken())
+        try service.delete()
+        XCTAssertNil(try service.load())
     }
 
     private func temporaryDirectory() throws -> URL {
@@ -229,7 +230,7 @@ final class ConfigStoreTests: XCTestCase {
     }
 
     @discardableResult
-    private func runGit(_ arguments: [String], in workingDirectory: URL) throws -> GitCommandResult {
+    private func runGit(_ arguments: [String], in workingDirectory: URL) throws -> GitFolder.GitCommandResult {
         let result = try GitRunner().run(arguments, in: workingDirectory, timeoutSeconds: 60)
         XCTAssertEqual(result.exitCode, 0, result.standardError)
         return result
@@ -249,8 +250,8 @@ private final class FakeGitRunner: GitRunning, @unchecked Sendable {
         in workingDirectory: URL,
         timeoutSeconds: TimeInterval,
         environment: [String: String]
-    ) throws -> GitCommandResult {
+    ) throws -> GitFolder.GitCommandResult {
         calls.append(Call(arguments: arguments, environment: environment))
-        return GitCommandResult(exitCode: 0, standardOutput: "", standardError: "")
+        return GitFolder.GitCommandResult(exitCode: 0, standardOutput: "", standardError: "")
     }
 }
