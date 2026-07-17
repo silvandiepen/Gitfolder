@@ -1,0 +1,29 @@
+name: Swift GitKit
+
+on:
+  pull_request:
+    branches: [main, development]
+    paths:
+      - swift/GitKit/**
+      - .github/workflows/swift-gitkit.yml
+  push:
+    branches: [main, development]
+    paths:
+      - swift/GitKit/**
+      - .github/workflows/swift-gitkit.yml
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: swift/GitKit
+    steps:
+      - uses: actions/checkout@v6
+      - name: Swift version
+        run: swift --version
+      - name: Build
+        run: swift build
+      - name: Test
+        run: swift test
