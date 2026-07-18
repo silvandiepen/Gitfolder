@@ -15,13 +15,15 @@ the GitKit board.
 | Board logic (schema, inheritance, rank, validation) | `packages/gitkanban-core` (TS) | **Exists** — built + tested |
 | Shared git engine + services | `swift/GitKit` | **Partial** — `GitEngine` protocol, `ShellGitEngine`, `KeychainService`, `GitHubOAuthService` exist; `MarkdownStore`, `ConfigStore`, `FolderAccessService` pending |
 | Swift board model (`BoardStore`/`BoardMarkdown`, config) mirroring core | `swift/GitKit` | **Exists** — GITKIT-009, in the shared package, tested |
-| App shell + board UI | `apps/gitkanban-macos/GitKanban/` | **Exists (read-only)** — `GitKanbanApp`, `BoardViewModel`, `BoardView` build and render a board. Editing / drag-to-move / git-sync **Planned** |
+| App shell + board UI | `apps/gitkanban-macos/GitKanban/` | **Exists (full read/write)** — `GitKanbanApp` + `AppModel` drive connect, multi-repo checkouts, board render, card create/edit/move/delete, project create/settings, and commit/push sync |
 
 > The GitKit task board tracked the Swift board model (GITKIT-009) and the board UI render
-> (GITKIT-010) as deliverables; both are merged. The Swift board model lives in `swift/GitKit`, and
-> `apps/gitkanban-macos/GitKanban/` builds a read-only board UI on top of it. Card editing,
-> drag-to-move, and git commit/sync are still Planned. Do not assume Swift APIs beyond what
-> `swift/GitKit/Sources/GitKit/` and `apps/gitkanban-macos/GitKanban/` actually contain.
+> (GITKIT-010) as deliverables; both are merged. The app is now a full client: it clones one or
+> more repos into app-owned checkouts, renders the board, and writes cards/projects back as
+> markdown that it commits and pushes. The read→edit→commit→push orchestration lives **inline in
+> `AppModel`** rather than in the separately-planned `MarkdownStore` / `BoardSyncEngine` modules
+> (see below) — extracting those remains a refactor, not a missing feature. Do not assume Swift
+> APIs beyond what `swift/GitKit/Sources/GitKit/` and `apps/gitkanban-macos/GitKanban/` contain.
 
 ---
 
@@ -92,9 +94,9 @@ UI run on macOS shell-git and (later) iOS libgit2 unchanged.
 
 ```txt
         ┌──────────────────────────────────────────────┐
-        │  SwiftUI board UI  (columns · card editor ·   │   Partial — columns render
-        │  drag/drop · history view)                    │   (read-only); editor/drag/
-        └───────────────┬──────────────────────────────┘   history Planned
+        │  SwiftUI board UI  (columns · card editor ·   │   Exists — columns, drag/drop,
+        │  drag/drop · history view)                    │   card-detail window + editor,
+        └───────────────┬──────────────────────────────┘   history sheet all shipped
                         │ reads/writes domain objects only
                         ▼
         ┌──────────────────────────────────────────────┐
@@ -104,11 +106,10 @@ UI run on macOS shell-git and (later) iOS libgit2 unchanged.
                 │                            │
                 ▼                            ▼
    ┌─────────────────────────┐   ┌──────────────────────────────┐
-   │ MarkdownStore           │   │ BoardSyncEngine              │   Planned
-   │ files ⇄ cards, using    │   │ orchestrates commit-per-     │
-   │ core schema rules       │   │ action, pull --rebase / push │
-   │ (Yams frontmatter)      │   │ + status states              │
-   └───────────┬─────────────┘   └───────────────┬──────────────┘
+   │ MarkdownStore           │   │ BoardSyncEngine              │   Shipped inline in
+   │ files ⇄ cards, using    │   │ orchestrates commit-per-     │   AppModel (not yet
+   │ core schema rules       │   │ action, pull --rebase / push │   extracted into these
+   │ (Yams frontmatter)      │   │ + status states              │   standalone modules)
                │                                  │ calls only the protocol
                │                                  ▼
                │                    ┌──────────────────────────────┐

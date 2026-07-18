@@ -3,7 +3,7 @@
 GitKanban is a native macOS kanban board whose **only data source is a git repository of
 markdown files**. There is no product backend and no hosted database: the board *is* a folder
 in a git repo the user owns, hosted wherever they host git. Every edit is a change to a file and
-a commit; sync is `git pull` / `git push` against the user's own remote.
+a commit; sync is `git pull --rebase` / `git push` against the user's own remote.
 
 > Working tagline: *your kanban board is a git repo.*
 
@@ -11,135 +11,109 @@ a commit; sync is `git pull` / `git push` against the user's own remote.
 
 | Mark | Meaning |
 |---|---|
-| **Exists** | Implemented today (TS core, board contract, shared git engine pieces, and the read-only macOS board UI). |
-| **Planned** | Specced in the plan / tracked on the GitKit board; not built in the app yet. |
+| **Shipped** | Built and working in the macOS app today. |
+| **Planned** | Specced / tracked on the GitKit board; not built yet. |
 
-The macOS **app builds and runs a working read-only board**. It renders one column per lane from a
-folder of markdown cards, loaded via the shared `GitKit` package (`BoardViewModel` uses
-`BoardConfig`/`Lane`/`EffectiveConfig`, `BoardStore`, and `BoardMarkdown`); until a folder is opened
-it shows a few sample cards. The board *logic* it renders (schema, inheritance, ordering,
-validation) **exists** in the TypeScript package
-[`@gitkit/gitkanban-core`](../../../packages/gitkanban-core/), and the board *format* is the
-canonical contract in `project-assets/Tasks/README.md`. What remains **Planned** is card **editing**,
-**drag-to-move**, and **git commit/sync**; see [Architecture.md](./Architecture.md) for what is on
-disk versus tracked.
+The macOS app is a **full read/write kanban client**: connect a GitHub account, connect one or
+more repositories (each cloned into an app-owned checkout), and manage projects, lanes, and cards
+as markdown files that are committed and pushed on every change. The board *logic* (schema,
+inheritance, ordering, validation) lives in the TypeScript package
+[`@gitkit/gitkanban-core`](../../../packages/gitkanban-core/) and its Swift mirror in
+`swift/GitKit`; the board *format* is the canonical contract in `project-assets/Tasks/README.md`.
 
 ---
 
 ## The board model
 
-A GitKanban board is one git repo (or a folder inside one) of markdown card files plus a board
-config defined as README frontmatter. The core concepts:
+A GitKanban board is one git repo of markdown card files plus board config defined as README
+frontmatter. Structure on disk is `/<project>/<lane>/<task>.md`, with `README.md` at the root and
+in each project folder holding the config.
 
 | Concept | Definition | Status |
 |---|---|---|
-| **Board** | A git repo / folder of card files + config. Phase 1 ships **one** board. | Core: Exists · App: Exists (opens one folder, read-only) |
-| **Column (lane)** | Derived from a card's `status` field, mapped through the config's `lanes`. **A column is a field, not a folder** at the data layer. | Core: Exists · App: Exists (renders) |
-| **Card** | **One markdown file** = one card: YAML frontmatter (structured fields) + markdown body (human prose). | Core: Exists · App: Exists (renders, read-only) |
-| **Config** | Root + per-project frontmatter (`lanes`, `users`, `priorities`, `types`, `epics`, `tags`) with inheritance. | Core: Exists |
-| **History** | Per-card journey read from git (`git log --follow`). | Engine: Exists · App view: Planned |
-
-### One board = one git repo of markdown files
-Point the app at a folder (via **Open Board Folder…**); it parses the config and cards and renders
-the board. Because the whole board is plain files, anything that reads a folder — editors, scripts,
-CI, agents — can read and write it. Opening a local folder and rendering it **Exists** today; the
-**clone** step (opening a remote repo) is still **Planned** Phase-1 work. The parsing rules it
-depends on **Exist** in the core.
-
-### Column = a `status` field
-Moving a card between columns changes **one field in one file** (`status: todo` → `status: done`);
-it does not move the file. This keeps `git log --follow` on a card continuous and keeps diffs to
-a single line. On disk the canonical contract also projects each lane to a **folder** (e.g.
-`1. To do/`), and folder and `status` must agree — folder-per-lane is the on-disk *projection*,
-`status` is the data-layer truth. `groupIntoColumns` builds columns in lane order and puts any
-card whose `status` matches no lane into an `uncategorised` bucket rather than dropping it.
-Core: **Exists**. UI rendering (columns + an Uncategorised column): **Exists**. Drag-to-move:
-**Planned**.
-
-### One card = one file (frontmatter cards)
-A card is YAML frontmatter for machines + a markdown body for humans. The modelled fields the app
-understands are `id`, `title`, `project`, `status`, `priority`, `type`, `epic`, `assignee`,
-`order`. **Unknown keys are preserved verbatim** on round-trip (see below). The full canonical
-card schema — the lifecycle fields (`picked_up_by`, `reviewer`, `testing_owner`, …) and required
-body sections — is in `project-assets/Tasks/README.md`; GitKanban renders a board of exactly that
-shape. Parse/serialize/field-reading: **Exists** in core. Card editor UI: **Planned**.
-
-### Config inheritance (root → project)
-Configuration lives as README frontmatter at two levels and resolves to an **effective config**:
-
-- **Root** (`Tasks/README.md`) — defaults for every project.
-- **Project** (`Tasks/<project>/README.md`) — per-project overrides.
-- **Lanes → replace.** A non-empty project `lanes` list fully replaces the root lanes (a custom
-  workflow); empty/absent inherits root lanes.
-- **Vocabularies → merge.** `users`, `priorities`, `types`, `epics`, `tags` extend the root set;
-  a project entry with the same `id` wins.
-
-Implemented as `resolveEffectiveConfig(root, project)`. Core: **Exists**.
-
-### Ordering within a column
-Two ordering strategies, both supported by the core:
-
-- **Fractional rank keys** (`order`) for free-form drag-reordering — inserting between two cards
-  mints one new key between the neighbours' keys, so only the moved card is rewritten (no
-  neighbour churn, no array-rewrite conflicts). Wrappers over `fractional-indexing`.
-- **Priority + `created_at` + `id`** fallback for boards (like the audit/task boards) that carry
-  no rank keys. `compareCards` uses `order` first, then priority, then `created_at`, then `id`.
-
-Core: **Exists**. Drag-to-reorder UI (minting one key): **Planned**.
-
-### History from git
-Per-card history comes from `git log --follow` on the file — "who moved this and when" for free.
-The shared engine already exposes `fileHistory(at:file:limit:)`. Engine: **Exists**. History
-**view** in the app: **Planned**.
-
-### Validation
-`validateCard` checks a card against its effective config: required `id`/`title`/`status`, a
-`status` that matches a lane, and `priority`/`type`/`assignee`/`epic` that reference configured
-ids. A card referencing an unknown id is a surfaced config error, not silent drift. Core:
-**Exists**.
-
-### Additive / lenient frontmatter
-Unknown frontmatter and config keys round-trip untouched, so agents (sills), CI, and other tools
-can add fields GitKanban does not model without data loss. A read-then-write of an unchanged card
-must produce a zero diff (a hard test gate). Core: **Exists**.
-
-### Legacy compatibility (body-section field source)
-Boards that keep fields as `**Label:** value` lines in a markdown section (the legacy `audit/tasks`
-format) are read via a `body-section` field source — no migration needed. `resolveCardFields`
-honours the config's `fieldSource`; a `body-section` source reads `status`/`assignee`/etc. from a
-named section (falling back to the whole body), and `title` falls back to the H1. Core: **Exists**;
-the app **auto-detects** this legacy format when opening a folder so those boards render too.
+| **Repository** | An app-owned checkout of a GitHub repo. **Several can be connected at once**; the sidebar shows a section per repo. | Shipped |
+| **Project** | A top-level folder with its own `README.md` config, listed in the sidebar under its repo. | Shipped |
+| **Column (lane)** | A card's `status` field mapped through config `lanes`; projected on disk as a numbered lane folder. | Shipped |
+| **Card** | One markdown file = one card: YAML frontmatter (structured fields) + markdown body. | Shipped |
+| **Config** | Root + per-project frontmatter (`lanes`, `users`, `priorities`, `types`, `epics`, `tags`) with inheritance. | Shipped |
+| **History** | Per-card journey read from git (`git log --follow`), shown in a History sheet. | Shipped |
 
 ---
 
-## Sync (Planned)
+## Connect & repositories
 
-The sync loop mirrors GitFolder's: open/clone → read → edit writes the affected card file(s) →
-**commit per logical action** with a descriptive message → **`pull --rebase` then `push`** on an
-interval and on demand. Per-board status states: synced / syncing / offline / needs-attention /
-conflict.
+- **GitHub sign-in** via OAuth device flow (reuses GitFolder's client). The verification code is
+  shown and **copies to the clipboard on click**. Token stored in the Keychain. **Shipped.**
+- **Repo picker** lists the account's repositories with a **Last Used** pin on top and a filter
+  field. Picking one clones it into an app-owned checkout under Application Support. **Shipped.**
+- **Multiple connected repositories.** Add more via the sidebar's **Add Repository** button (a
+  sheet that excludes already-connected repos). Each repo keeps its own checkout and workspace;
+  the sidebar renders one section per repo, projects nested beneath. A repo section menu offers
+  **New Project**, **Refresh**, and **Disconnect**. **Shipped.**
+- **Session restore.** The full connected-repo set is persisted and every repo reconnects on
+  launch, reselecting the last active project. Older single-repo sessions migrate automatically.
+  **Shipped.**
 
-- **Conflicts are surfaced, never silently discarded.** The schema (one file per card,
-  status-as-field, rank keys) designs most conflicts out; the ones that remain are single readable
-  lines. A card that loses a last-writer-wins race stays recoverable from git history.
-- **Write churn discipline:** only changed cards are written; `updated` is leaned toward
-  derive-from-git; rapid edits may be debounced into one commit in a "quiet mode".
-- **No realtime.** Sync latency = the pull interval, communicated as a feature (calm, not chatty).
+## The board
 
-Status: **Planned** (Phase 1). The `GitEngine` primitives it builds on (`clone/pullRebase/commit/
-push/status/fileHistory`) **Exist** in `swift/GitKit`.
+- **Lanes view** renders one column per lane in config order, plus a **backlog** dock (bottom or
+  right) for backlog lanes and an **Uncategorised** column for cards whose `status` matches no
+  lane. **Shipped.**
+- **List view** — an alternate grouped-list layout, toggled from the toolbar. **Shipped.**
+- **Focus-lane scaling.** As you scroll the lane carousel, lanes near the viewport centre render
+  full-size and the rest scale down, with the first/last lane always full at the ends. **Shipped.**
+- **Lane colours** from a named palette; used consistently across lane headers, card pills, and
+  the create/settings sheets. **Shipped.**
+- **Search** (⌘F) and **filters** by assignee, priority, and type, derived from the project's
+  config and cards. **Shipped.**
+
+## Cards
+
+- **Create task** (N on a selected lane, or a lane's Add Task button): writes a new markdown card
+  with frontmatter, commits, and pushes. **Shipped.**
+- **Task detail window** — a real, movable, resizable macOS window (traffic lights, a `⋯` actions
+  menu in the titlebar). Fields (title, lane, priority, type, assignee) are always-editable
+  selects; lane and priority show their colours; type is a menu with a **Custom…** option; the
+  description renders through **Nizel** in a WKWebView with an edit toggle. Actions: Show Markdown,
+  Find on GitHub, History…, Export…, Delete. **Shipped.**
+- **Drag to move / reorder** between lanes, applied **optimistically** (the card appears in the
+  target immediately; the file move + commit run in the background and revert on error). Dragging
+  toward a screen edge **auto-scrolls** the carousel; the dragged card hides in its source lane.
+  **Shipped.**
+- **Right-click card context menu** and **multi-select** (⌘-click) for bulk move / assign / delete
+  in a single commit. **Shipped.**
+- **Move = one field in one file.** Moving a card updates its `status` frontmatter (and its lane
+  folder projection) and rewrites `order` only for affected cards, keeping diffs minimal. **Shipped.**
+
+## Projects & settings
+
+- **Create Project** — a polished sheet for name, description, lanes, priorities, and assignees.
+  When several repos are connected it includes a **repository selector**. Seeds each lane folder
+  and commits. **Shipped.**
+- **Project Settings** — the **same sheet**, pre-filled from the project's effective config.
+  Lanes can be **renamed** (folder preserved), **reordered**, **added** (folder created), or
+  **removed** — removing a lane that holds tickets prompts for a target lane and **migrates** the
+  cards; removed assignees are **unassigned** from their tickets. Commits + pushes on save.
+  **Shipped.**
+
+## Sync
+
+The sync loop: connect/clone → read → an edit writes the affected card file(s) → **commit per
+logical action** with a descriptive message → **`pull --rebase` then `push`**. Unborn (empty)
+repos are handled by adopting the remote branch. A toolbar status reflects cloning / pulling /
+committing / pushing / pushed / error. **Shipped.**
+
+Config inheritance, fractional-rank ordering, validation, lenient (round-tripping) frontmatter,
+and legacy body-section field sources are provided by the core and its Swift mirror. **Shipped.**
 
 ---
 
-## Agents & external writers (Planned surface, Exists by construction)
+## Agents & external writers (Shipped by construction)
 
 Because the board is just files, agents, CI, and scripts write cards and push like any other
 client; GitKanban treats an inbound push as a normal pull and the new/changed cards appear. The
-lenient-frontmatter rule means an agent can add fields the app does not know and they survive. This
-"a human curates in a native UI, a fleet of agents populates through git" loop is the primary
-differentiator — and it already runs headless on the live `project-assets/Tasks` board today.
-
----
+lenient-frontmatter rule means an external writer can add fields the app does not model and they
+survive a round-trip. A dedicated MCP surface for agents is **Planned**.
 
 ## Non-goals (early)
 
@@ -147,7 +121,6 @@ differentiator — and it already runs headless on the live `project-assets/Task
 - A hosted service or accounts — the user brings their own git host.
 - A full PM suite — no gantt, sprints-with-burndown, or time tracking in v1.
 - Providers beyond **GitHub** in v1 (reuses GitFolder's OAuth).
-- Windows / Linux / web — Apple platforms first. iOS is Phase 2.
 
 See [Decisions.md](./Decisions.md) for why these choices were made and
 [Architecture.md](./Architecture.md) for how the pieces fit.
