@@ -3,7 +3,7 @@ import Foundation
 /// The one thing that knows git. The apps call only this protocol, so the same UI
 /// runs on macOS (shelling out to `git`) and iOS (embedded libgit2) unchanged.
 ///
-/// See `project-assets/GitKanban/plan/platforms-and-git.md`.
+/// See `project-assets/GitKit/GitKanban/plan/platforms-and-git.md`.
 public protocol GitEngine {
     func clone(_ remote: URL, to path: URL, auth: GitAuth) async throws
     func pullRebase(at path: URL, auth: GitAuth) async throws -> PullResult

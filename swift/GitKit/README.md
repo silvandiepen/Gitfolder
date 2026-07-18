@@ -24,4 +24,4 @@ the Xcode-verified follow-up.
 The UI never touches git or files directly; it goes through `GitEngine` and `MarkdownStore`.
 That boundary is what lets one board UI run on macOS shell-git and iOS libgit2 unchanged.
 
-See `project-assets/GitKanban/plan/architecture.md` and `platforms-and-git.md`.
+See `project-assets/GitKit/GitKanban/plan/architecture.md` and `platforms-and-git.md`.

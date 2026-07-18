@@ -16,7 +16,7 @@ cd apps/gitkanban-macos && xcodegen generate
 - **Git + services** come from the shared [`GitKit`](../../swift/GitKit/) Swift package
   (`GitEngine`, config, keychain, OAuth, folder access).
 - **Phase 1 scope** (macOS, one board, shell-out git, GitHub) is in
-  `project-assets/GitKanban/plan/phase-1.md`.
+  `project-assets/GitKit/GitKanban/plan/phase-1.md`.
 
 ## Planned structure
 

@@ -6,7 +6,7 @@ import { generateKeyBetween, generateNKeysBetween } from 'fractional-indexing'
  * A key is a short string that sorts lexicographically. Inserting between two
  * cards mints a new key strictly between their keys, so only the moved card is
  * rewritten — no neighbour churn, no array-rewrite conflicts. See
- * `project-assets/GitKanban/plan/sync-model.md`.
+ * `project-assets/GitKit/GitKanban/plan/sync-model.md`.
  *
  * Thin, well-tested wrappers over `fractional-indexing` so call sites read in
  * board terms rather than library terms. The Swift port mirrors these.

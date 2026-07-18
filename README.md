@@ -46,7 +46,7 @@ Docs: [product spec](docs/product-spec.md) · [data model](docs/data-model.md) �
 Your kanban board is a git repo. A native macOS/iOS kanban app backed by markdown files in a
 git repository you own — full history, no server, portable by default. The board schema,
 config inheritance, and card logic live in [`packages/gitkanban-core`](packages/gitkanban-core/),
-and the full plan lives in the `project-assets` repo under `GitKanban/plan/`.
+and the full plan lives in the `project-assets` repo under `GitKit/GitKanban/plan/`.
 
 The canonical board format is the shared Tasks contract (`project-assets/Tasks/README.md`):
 root/project configuration with inheritance, and markdown cards with YAML frontmatter.
