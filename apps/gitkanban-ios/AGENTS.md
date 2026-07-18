@@ -5,31 +5,38 @@ rules. Global hard rules and conventions are not restated here.
 
 ## Status
 
-**Planned — Phase 2, the furthest-out target.** This directory is **docs/spec only; there is no code
-here yet.** Do not scaffold an Xcode target, add sources, or mark anything as implemented. Everything
-about this app is Planned/Proposed until GitKanban macOS (Phase 1) and the iOS git engine exist.
+**Working read/write board over an API transport.** The app is scaffolded and builds for the iOS
+Simulator: connect (GitHub / GitLab.com / self-hosted GitLab via a personal access token) → repo
+picker → board load → create/edit/move/delete cards. Transport is the provider **REST API via
+[git-pont](../../../_libs/git-pont)** (no local clone, no `git` binary), **not** the
+previously-planned `libgit2` engine — that gate is superseded and no `Libgit2Engine` exists.
+Board parsing/model stays in shared `swift/GitKit` (`RemoteBoardStore` + `BoardFileSource`); iOS
+must not fork the schema or the board logic. An embedded-libgit2 offline mode is a possible later
+addition, not a prerequisite. Writes are currently blind (last-writer-wins); reorder, per-card
+history, offline, and conflict handling are not built yet.
 
 ## What this app depends on (do not duplicate)
 
-- **Git transport:** the shared iOS **`Libgit2Engine`** in [`swift/GitKit`](../../swift/GitKit/) —
-  shared with GitFolder iOS, since iOS has no shell and cannot run the macOS subprocess engine. It is
-  unbuilt; it is de-risked by the `spikes/libgit2-ios/` spike (`GITKIT-128`). **Do not build a second
-  git engine or a new git abstraction** — conform to the existing `GitEngine` protocol.
+- **Git transport:** git-pont's `GitProvider` (`GitPontCore` + `GitPontGitHub`/`GitPontGitLab`),
+  reached through `GitPontFileSource`, which conforms to GitKit's **`BoardFileSource`**. iOS has no
+  shell and cannot run the macOS subprocess engine. **Do not build a git engine or call
+  `GitEngine`** — the board is loaded/written through `BoardFileSource` + `RemoteBoardStore`.
 - **Board schema + logic:** [`@gitkit/gitkanban-core`](../../packages/gitkanban-core/). **TypeScript
-  is the source of truth**; Swift mirrors it. **Do not build a second board/schema abstraction** —
-  reuse the shared one, as macOS does.
-- **Board UI:** produced by GitKanban macOS as a platform-agnostic layer, intended to run on iOS
-  unchanged. iOS adds touch navigation/drag chrome around it, not a reimplementation.
+  is the source of truth**; Swift mirrors it (via `swift/GitKit`). **Do not build a second
+  board/schema abstraction** — reuse the shared one, as macOS does.
+- **Board UI:** the iOS UI is **bespoke SwiftUI** written in this app (`RootView`, `BoardScreen`,
+  `CardSheets`), not imported from macOS. Keep it thin over the shared model; do not fork board
+  logic into the views.
 
 ## Where the plan and tasks live
 
-- **Plan:** `project-assets/GitKit/GitKanban/plan/` — `platforms-and-git.md` (the iOS git story),
-  `architecture.md`, `implementation-plan.md` (Phase 2). Local detail in [`docs/`](./docs/).
-- **Tasks:** the `GitKit` board, `project-assets/Tasks/GitKit/`, epic **`gitkanban-ios`**. The epic
-  is defined; no cards are open in it yet.
+- **Plan:** `/Users/silvandiepen/Projects/GitKit/GitKanban/plan/` — `platforms-and-git.md` (the iOS
+  git story), `architecture.md`. Local detail in [`docs/`](./docs/).
+- **Tasks:** the `GitKit` board, `/Users/silvandiepen/Projects/Tasks/GitKit/`, epic
+  **`gitkanban-ios`**.
 
 ## When writing docs here
 
 - Never present planned work as done; never fabricate concrete APIs. Where the plan is silent, write
-  **Open**. Record any judgment call in [`docs/Decisions.md`](./docs/Decisions.md) as Proposed/Open.
+  **Open**. Record any judgment call in [`docs/Decisions.md`](./docs/Decisions.md).
 - Do not modify code or other apps' files from this directory.

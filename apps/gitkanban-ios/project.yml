@@ -1,0 +1,73 @@
+name: GitKanban
+options:
+  bundleIdPrefix: app.hakobs
+  deploymentTarget:
+    iOS: "17.0"
+  xcodeVersion: "16.0"
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: 1
+    SWIFT_VERSION: "5.0"
+    DEVELOPMENT_TEAM: "38MGF83L2L"
+
+packages:
+  # iOS transport: the GitHub REST API via git-pont (no local clone / no shell).
+  git-pont:
+    url: https://github.com/silvandiepen/git-pont.git
+    branch: codex/initial-git-pont-monorepo
+  # The shared board model + parsers (mirrors @gitkit/gitkanban-core).
+  GitKit:
+    path: ../../swift/GitKit
+
+targets:
+  GitKanban:
+    type: application
+    platform: iOS
+    sources:
+      - path: GitKanban
+    dependencies:
+      - package: git-pont
+        product: GitPontCore
+      - package: git-pont
+        product: GitPontGitHub
+      - package: git-pont
+        product: GitPontGitLab
+      - package: GitKit
+        product: GitKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.hakobs.gitkanban
+        INFOPLIST_FILE: GitKanban/Info.plist
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+    info:
+      path: GitKanban/Info.plist
+      properties:
+        CFBundleDisplayName: GitKanban
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        LSRequiresIPhoneOS: true
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+
+  GitKanbanTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: GitKanban
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
