@@ -43,13 +43,14 @@ configuration with inheritance, and markdown cards with YAML frontmatter.
 |---|---|---|---|
 | GitFolder (macOS) | `apps/gitfolder-macos/` | SwiftUI + AppKit menu-bar app, XcodeGen | **Shipping** (App Store) |
 | GitFolder (iOS) | `apps/gitfolder-ios/` | SwiftUI, embedded libgit2 (planned) | Planned — docs/spec only; libgit2 spike outstanding |
-| GitKanban (macOS) | `apps/gitkanban-macos/` | SwiftUI board app, XcodeGen | In development — scaffold (XcodeGen project + initial board render) |
+| GitKanban (macOS) | `apps/gitkanban-macos/` | SwiftUI board app, XcodeGen | In development — read-only board UI (loads markdown boards via GitKit; editing/drag/git-sync deferred) |
 | GitKanban (iOS) | `apps/gitkanban-ios/` | SwiftUI, libgit2 (planned) | Planned — Phase 2, not scaffolded |
 | Website | `apps/website/` | Vue 3 + Vite, deployed on Cloudflare Pages | Shipping |
 
-> Status is deliberately honest. Only GitFolder macOS ships today. GitKanban macOS is an
-> in-development scaffold. Both iOS apps are plan-only. The shared Swift package extraction
-> (see below) is **in progress**, not complete.
+> Status is deliberately honest. Only GitFolder macOS ships today. GitKanban macOS is in
+> development — it builds and renders a read-only board loaded via GitKit, with editing,
+> drag-to-move, and git-sync still deferred. Both iOS apps are plan-only. The shared Swift
+> package extraction (see below) is **in progress**, not complete.
 
 ## The shared engine
 

@@ -5,9 +5,11 @@ rules. It does not restate the global hard rules — they still apply.
 
 ## What this app is
 
-An **in-development scaffold**. Today `apps/gitkanban-macos/` contains only `project.yml` and
-`README.md`; the SwiftUI board app is Phase 1 work not yet in this directory. It is a native macOS
-kanban board whose data source is a git repo of markdown files. See
+A native macOS kanban board whose data source is a git repo of markdown files. Today the app
+**builds and runs a working read-only board**: `GitKanban/App/GitKanbanApp.swift`,
+`GitKanban/App/BoardViewModel.swift`, and `GitKanban/Board/BoardView.swift` render one column per
+lane from a folder of markdown cards, loaded via the shared `GitKit` package. Card **editing**,
+**drag-to-move** between lanes, and **git commit/sync** are deferred to later tickets. See
 [`docs/Architecture.md`](./docs/Architecture.md) for what exists vs. what is planned, and
 [`docs/Features.md`](./docs/Features.md) / [`docs/Decisions.md`](./docs/Decisions.md) for the rest.
 

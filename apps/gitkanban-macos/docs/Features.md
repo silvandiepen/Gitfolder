@@ -11,14 +11,18 @@ a commit; sync is `git pull` / `git push` against the user's own remote.
 
 | Mark | Meaning |
 |---|---|
-| **Exists** | Implemented and tested today (TS core, board contract, shared git engine pieces). |
-| **Planned** | Specced in the plan / tracked on the GitKit board; not present in this app directory yet. |
+| **Exists** | Implemented today (TS core, board contract, shared git engine pieces, and the read-only macOS board UI). |
+| **Planned** | Specced in the plan / tracked on the GitKit board; not built in the app yet. |
 
-The macOS **app itself is a scaffold** — `project.yml` + `README.md` only. The board *logic* it
-will render (schema, inheritance, ordering, validation) already **exists** in the TypeScript
-package [`@gitkit/gitkanban-core`](../../../packages/gitkanban-core/), and the board *format* is
-the canonical contract in `project-assets/Tasks/README.md`. The Swift UI is Planned; see
-[Architecture.md](./Architecture.md) for what is on disk versus tracked.
+The macOS **app builds and runs a working read-only board**. It renders one column per lane from a
+folder of markdown cards, loaded via the shared `GitKit` package (`BoardViewModel` uses
+`BoardConfig`/`Lane`/`EffectiveConfig`, `BoardStore`, and `BoardMarkdown`); until a folder is opened
+it shows a few sample cards. The board *logic* it renders (schema, inheritance, ordering,
+validation) **exists** in the TypeScript package
+[`@gitkit/gitkanban-core`](../../../packages/gitkanban-core/), and the board *format* is the
+canonical contract in `project-assets/Tasks/README.md`. What remains **Planned** is card **editing**,
+**drag-to-move**, and **git commit/sync**; see [Architecture.md](./Architecture.md) for what is on
+disk versus tracked.
 
 ---
 
@@ -29,17 +33,18 @@ config defined as README frontmatter. The core concepts:
 
 | Concept | Definition | Status |
 |---|---|---|
-| **Board** | A git repo / folder of card files + config. Phase 1 ships **one** board. | Core: Exists · App: Planned |
-| **Column (lane)** | Derived from a card's `status` field, mapped through the config's `lanes`. **A column is a field, not a folder** at the data layer. | Core: Exists · App: Planned |
-| **Card** | **One markdown file** = one card: YAML frontmatter (structured fields) + markdown body (human prose). | Core: Exists · App: Planned |
+| **Board** | A git repo / folder of card files + config. Phase 1 ships **one** board. | Core: Exists · App: Exists (opens one folder, read-only) |
+| **Column (lane)** | Derived from a card's `status` field, mapped through the config's `lanes`. **A column is a field, not a folder** at the data layer. | Core: Exists · App: Exists (renders) |
+| **Card** | **One markdown file** = one card: YAML frontmatter (structured fields) + markdown body (human prose). | Core: Exists · App: Exists (renders, read-only) |
 | **Config** | Root + per-project frontmatter (`lanes`, `users`, `priorities`, `types`, `epics`, `tags`) with inheritance. | Core: Exists |
 | **History** | Per-card journey read from git (`git log --follow`). | Engine: Exists · App view: Planned |
 
 ### One board = one git repo of markdown files
-Point the app at a repo + folder; it clones if needed, opens a local clone, parses the config
-and cards, and renders the board. Because the whole board is plain files, anything that reads a
-folder — editors, scripts, CI, agents — can read and write it. **Planned** (open/clone flow is
-tracked as Phase-1 work); the parsing rules it depends on **Exist** in the core.
+Point the app at a folder (via **Open Board Folder…**); it parses the config and cards and renders
+the board. Because the whole board is plain files, anything that reads a folder — editors, scripts,
+CI, agents — can read and write it. Opening a local folder and rendering it **Exists** today; the
+**clone** step (opening a remote repo) is still **Planned** Phase-1 work. The parsing rules it
+depends on **Exist** in the core.
 
 ### Column = a `status` field
 Moving a card between columns changes **one field in one file** (`status: todo` → `status: done`);
@@ -48,7 +53,8 @@ a single line. On disk the canonical contract also projects each lane to a **fol
 `1. To do/`), and folder and `status` must agree — folder-per-lane is the on-disk *projection*,
 `status` is the data-layer truth. `groupIntoColumns` builds columns in lane order and puts any
 card whose `status` matches no lane into an `uncategorised` bucket rather than dropping it.
-Core: **Exists**. UI rendering/drag: **Planned**.
+Core: **Exists**. UI rendering (columns + an Uncategorised column): **Exists**. Drag-to-move:
+**Planned**.
 
 ### One card = one file (frontmatter cards)
 A card is YAML frontmatter for machines + a markdown body for humans. The modelled fields the app
@@ -101,7 +107,8 @@ must produce a zero diff (a hard test gate). Core: **Exists**.
 Boards that keep fields as `**Label:** value` lines in a markdown section (the legacy `audit/tasks`
 format) are read via a `body-section` field source — no migration needed. `resolveCardFields`
 honours the config's `fieldSource`; a `body-section` source reads `status`/`assignee`/etc. from a
-named section (falling back to the whole body), and `title` falls back to the H1. Core: **Exists**.
+named section (falling back to the whole body), and `title` falls back to the H1. Core: **Exists**;
+the app **auto-detects** this legacy format when opening a folder so those boards render too.
 
 ---
 

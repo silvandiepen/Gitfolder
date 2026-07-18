@@ -14,13 +14,14 @@ the GitKit board.
 | Board contract (card + config format) | `project-assets/Tasks/README.md` | **Exists** (canonical, live board) |
 | Board logic (schema, inheritance, rank, validation) | `packages/gitkanban-core` (TS) | **Exists** — built + tested |
 | Shared git engine + services | `swift/GitKit` | **Partial** — `GitEngine` protocol, `ShellGitEngine`, `KeychainService`, `GitHubOAuthService` exist; `MarkdownStore`, `ConfigStore`, `FolderAccessService` pending |
-| Swift board model (`BoardModel`/`BoardStore`) mirroring core | app `Models/` (+ maybe `swift/GitKit`) | **Planned** — tracked as GITKIT-009; not in this directory |
-| App shell + board UI | `apps/gitkanban-macos/GitKanban/` | **Planned** — directory is a scaffold (`project.yml` + `README.md` only) |
+| Swift board model (`BoardStore`/`BoardMarkdown`, config) mirroring core | `swift/GitKit` | **Exists** — GITKIT-009, in the shared package, tested |
+| App shell + board UI | `apps/gitkanban-macos/GitKanban/` | **Exists (read-only)** — `GitKanbanApp`, `BoardViewModel`, `BoardView` build and render a board. Editing / drag-to-move / git-sync **Planned** |
 
-> The GitKit task board tracks the Swift board model (GITKIT-009) and the board UI render
-> (GITKIT-010) as deliverables. They are not present in `apps/gitkanban-macos/` in this checkout,
-> so this document describes them as Planned. Do not assume Swift APIs beyond what
-> `swift/GitKit/Sources/GitKit/` actually contains.
+> The GitKit task board tracked the Swift board model (GITKIT-009) and the board UI render
+> (GITKIT-010) as deliverables; both are merged. The Swift board model lives in `swift/GitKit`, and
+> `apps/gitkanban-macos/GitKanban/` builds a read-only board UI on top of it. Card editing,
+> drag-to-move, and git commit/sync are still Planned. Do not assume Swift APIs beyond what
+> `swift/GitKit/Sources/GitKit/` and `apps/gitkanban-macos/GitKanban/` actually contain.
 
 ---
 
@@ -91,14 +92,14 @@ UI run on macOS shell-git and (later) iOS libgit2 unchanged.
 
 ```txt
         ┌──────────────────────────────────────────────┐
-        │  SwiftUI board UI  (columns · card editor ·   │   Planned
-        │  drag/drop · history view)                    │
-        └───────────────┬──────────────────────────────┘
+        │  SwiftUI board UI  (columns · card editor ·   │   Partial — columns render
+        │  drag/drop · history view)                    │   (read-only); editor/drag/
+        └───────────────┬──────────────────────────────┘   history Planned
                         │ reads/writes domain objects only
                         ▼
         ┌──────────────────────────────────────────────┐
-        │  Domain: Board · Column · Card · Config       │   Planned (Swift mirror
-        │  (mirrors @gitkit/gitkanban-core)             │   of the TS core / GITKIT-009)
+        │  Domain: Board · Column · Card · Config       │   Exists (Swift mirror in
+        │  (mirrors @gitkit/gitkanban-core)             │   swift/GitKit / GITKIT-009)
         └───────┬───────────────────────────┬──────────┘
                 │                            │
                 ▼                            ▼

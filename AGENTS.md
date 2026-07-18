@@ -14,7 +14,7 @@ source of truth.
 |---|---|---|---|
 | GitFolder (macOS) | `apps/gitfolder-macos/` | SwiftUI/AppKit menu-bar app | Shipping (App Store) |
 | GitFolder (iOS) | `apps/gitfolder-ios/` | SwiftUI (planned) | Roadmap — libgit2 spike + plan |
-| GitKanban (macOS) | `apps/gitkanban-macos/` | SwiftUI board app | In development (scaffold) |
+| GitKanban (macOS) | `apps/gitkanban-macos/` | SwiftUI board app | In development (read-only board UI) |
 | GitKanban (iOS) | `apps/gitkanban-ios/` | SwiftUI (planned) | Roadmap — Phase 2 |
 | Website | `apps/website/` | Vue 3 + Vite | Shipping |
 
@@ -27,7 +27,7 @@ When a per-app rule conflicts with this file, **the per-app file wins**.
 apps/
   gitfolder-macos/    GitFolder — macOS menu-bar app (SwiftUI/AppKit, XcodeGen)
   gitfolder-ios/      GitFolder — iOS app (planned; docs/spec only)
-  gitkanban-macos/    GitKanban — macOS board app (scaffold)
+  gitkanban-macos/    GitKanban — macOS board app (read-only board UI)
   gitkanban-ios/      GitKanban — iOS app (planned; docs/spec only)
   website/            Marketing/docs site (Vue 3 + Vite)
 packages/

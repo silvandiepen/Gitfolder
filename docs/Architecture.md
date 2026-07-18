@@ -12,7 +12,7 @@ apps/
   gitfolder-macos/    GitFolder — macOS menu-bar app (SwiftUI/AppKit, XcodeGen). Shipping.
                       (rename → gitfolder-macos is tracked: GITKIT-007)
   gitfolder-ios/      GitFolder — iOS app. Planned; docs/spec only, no code.
-  gitkanban-macos/    GitKanban — macOS board app (SwiftUI, XcodeGen). In development (scaffold).
+  gitkanban-macos/    GitKanban — macOS board app (SwiftUI, XcodeGen). In development — read-only board UI (loads markdown boards via GitKit; editing/drag/git-sync deferred).
   gitkanban-ios/      GitKanban — iOS app. Planned; not yet scaffolded.
   website/            Marketing/docs site (Vue 3 + Vite). Shipping.
 packages/

@@ -16,13 +16,13 @@ source of truth. They share the same git plumbing, so it lives in one repo.
 ```txt
 apps/
   gitfolder-macos/    GitFolder — macOS menu-bar app (SwiftUI/AppKit, XcodeGen)
-  gitkanban-macos/    GitKanban — macOS board app (scaffold)
+  gitkanban-macos/    GitKanban — macOS board app (read-only board UI)
   website/            Marketing/docs site (Vue 3 + Vite)
 packages/
   core/               @gitfolder/core — GitFolder's TypeScript contract
   gitkanban-core/     @gitkit/gitkanban-core — GitKanban board schema + logic (TS, tested)
 swift/
-  GitKit/             Shared Swift package: the GitEngine and app services (scaffold)
+  GitKit/             Shared Swift package: the GitEngine, board model, and app services (implemented + tested)
 docs/                 GitFolder product docs
 ```
 
