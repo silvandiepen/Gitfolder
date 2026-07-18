@@ -15,6 +15,9 @@ apps/gitfolder-macos/build/
 apps/gitfolder-macos/*.xcuserdata/
 apps/gitkanban-macos/*.xcodeproj/
 apps/gitkanban-macos/DerivedData/
+apps/gitkanban-macos/GitKanban/Info.plist
+apps/gitkanban-macos/GitKanban/GitKanban.entitlements
+swift/GitKit/Package.resolved
 apps/gitkanban-macos/build/
 apps/gitkanban-macos/*.xcuserdata/
 swift/*/.build/

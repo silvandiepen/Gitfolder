@@ -2,16 +2,17 @@ import GitKit
 import SwiftUI
 
 /// A card's detail: read mode renders the markdown body via Nizel; edit mode is a
-/// plain-text editor over the raw `.md` file that saves straight back to disk.
+/// plain-text editor over the raw `.md` file. Saving writes the file and commits +
+/// pushes it to the live repo in the background.
 struct CardDetailView: View {
-    @Environment(BoardViewModel.self) private var model
+    @Environment(AppModel.self) private var model
     let card: Card
 
     enum Mode: Hashable { case read, edit }
 
     @State private var mode: Mode = .read
     @State private var draft = ""
-    @State private var saveError: String?
+    @State private var isSaving = false
 
     private var editable: Bool { model.canEdit(card) }
     private var title: String { card.fields.title.isEmpty ? card.fields.id : card.fields.title }
@@ -32,9 +33,9 @@ struct CardDetailView: View {
                 metadata
             }
             Spacer(minLength: 12)
-            if let saveError {
-                Text(saveError).font(.caption).foregroundStyle(.red).lineLimit(1)
-            }
+            Text(model.syncStatus)
+                .font(.caption)
+                .foregroundStyle(.secondary)
             if editable {
                 Picker("", selection: $mode) {
                     Text("Read").tag(Mode.read)
@@ -44,7 +45,9 @@ struct CardDetailView: View {
                 .pickerStyle(.segmented)
                 .fixedSize()
                 if mode == .edit {
-                    Button("Save", action: save).keyboardShortcut("s", modifiers: .command)
+                    Button("Save", action: save)
+                        .keyboardShortcut("s", modifiers: .command)
+                        .disabled(isSaving)
                 }
             }
             Button("Done") { model.selectedCard = nil }
@@ -54,7 +57,6 @@ struct CardDetailView: View {
         .onChange(of: mode) { _, newValue in
             if newValue == .edit {
                 draft = model.rawText(for: card) ?? card.body
-                saveError = nil
             }
         }
     }
@@ -90,12 +92,12 @@ struct CardDetailView: View {
     }
 
     private func save() {
-        do {
-            try model.save(card: card, text: draft)
-            saveError = nil
+        isSaving = true
+        let text = draft
+        Task {
+            await model.saveCard(card, text: text)
+            isSaving = false
             mode = .read
-        } catch {
-            saveError = error.localizedDescription
         }
     }
 }

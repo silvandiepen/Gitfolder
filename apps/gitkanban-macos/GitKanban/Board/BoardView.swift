@@ -1,45 +1,41 @@
 import GitKit
 import SwiftUI
 
+/// Renders the selected project's board: its lanes as columns, plus any
+/// uncategorised cards. Tapping a card opens its detail sheet.
 struct BoardView: View {
-    @Environment(BoardViewModel.self) private var model
+    @Environment(AppModel.self) private var model
 
     var body: some View {
         @Bindable var model = model
-        return VStack(spacing: 0) {
-            header
-            Divider()
-            ScrollView(.horizontal) {
-                HStack(alignment: .top, spacing: 16) {
-                    ForEach(model.columns) { column in
-                        ColumnView(column: column)
+        return Group {
+            if let board = model.board {
+                ScrollView(.horizontal) {
+                    HStack(alignment: .top, spacing: 16) {
+                        ForEach(board.columns) { column in
+                            ColumnView(column: column)
+                        }
+                        if !board.uncategorised.isEmpty {
+                            ColumnView(column: Column(
+                                lane: Lane(id: "_uncategorised", name: "Uncategorised", folder: "", status: ""),
+                                cards: board.uncategorised
+                            ))
+                        }
                     }
-                    if !model.uncategorised.isEmpty {
-                        ColumnView(column: Column(
-                            lane: Lane(id: "_uncategorised", name: "Uncategorised", folder: "", status: ""),
-                            cards: model.uncategorised
-                        ))
-                    }
+                    .padding(16)
                 }
-                .padding(16)
+            } else {
+                ContentUnavailableView(
+                    "No project selected",
+                    systemImage: "square.stack.3d.up",
+                    description: Text("Pick a project from the sidebar.")
+                )
             }
         }
-        .frame(minWidth: 820, minHeight: 520)
+        .frame(minWidth: 620, minHeight: 480)
         .sheet(item: $model.selectedCard) { card in
             CardDetailView(card: card).environment(model)
         }
-    }
-
-    private var header: some View {
-        HStack(spacing: 12) {
-            Text(model.boardName).font(.headline)
-            if let error = model.errorMessage {
-                Text(error).font(.caption).foregroundStyle(.red).lineLimit(1)
-            }
-            Spacer()
-            Button("Open Folder…") { model.openFolder() }
-        }
-        .padding(12)
     }
 }
 
@@ -65,7 +61,7 @@ private struct ColumnView: View {
 }
 
 private struct CardCell: View {
-    @Environment(BoardViewModel.self) private var model
+    @Environment(AppModel.self) private var model
     let card: Card
 
     var body: some View {
