@@ -1,5 +1,15 @@
 // ==========================================================================
-// GitFolder Styles — entry point
+// GitKit Styles — entry point
+//
+// We adopt @sil/ui's *token + colour* layer, not its full style bundle: the
+// bundle's `app.scss` forces `height:100vh` + scroll-snap + a black-vignette
+// body background that is meant for an app shell and breaks a scrolling
+// marketing site. So we import `@sil/ui/defaults` (colour tokens + dark/light
+// via [data-theme]/prefers) and mirror @sil/ui's spacing / radius / font-size /
+// shadow / transition token contract in `variables`, then build on those vars.
+// (Recorded in apps/website/AGENTS notes.)
 // ==========================================================================
 
+@use '@sil/ui/defaults';
+@use 'variables';
 @use 'base';

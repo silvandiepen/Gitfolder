@@ -1,0 +1,36 @@
+{
+  "meta": {
+    "title": "Support — GitKit",
+    "description": "Support and troubleshooting for GitFolder and GitKanban. Most issues come down to git, token access, repository URLs, or folder permissions."
+  },
+  "title": "Support",
+  "intro": "GitFolder and GitKanban are small, local-first apps. Most issues come down to git, token access, repository URLs, or folder permissions. Pick your app below.",
+  "gitfolder": {
+    "heading": "GitFolder",
+    "setup": {
+      "title": "Check your setup",
+      "steps": [
+        { "title": "Verify Git is installed", "descHtml": "Open Terminal and run <code>git --version</code>. If not found, install Xcode Command Line Tools: <code>xcode-select --install</code>." },
+        { "title": "Test GitHub access", "descHtml": "Open GitFolder Settings, paste a fine-grained GitHub token, enter the repository URL, and run Test GitHub Access." },
+        { "title": "Check the repository URL", "descHtml": "Make sure the URL in GitFolder matches the HTTPS URL on your GitHub repository page. It should start with <code>https://github.com/</code>. SSH URLs are available under Advanced settings." }
+      ]
+    },
+    "common": {
+      "title": "Common issues",
+      "items": [
+        { "title": "Folder shows \"Error\" status", "descHtml": "Open Settings and check the error message. The most common causes are a missing token, a token without repository access, an incorrect repository URL, or a folder permission that needs to be refreshed." },
+        { "title": "Folder shows \"Needs attention\"", "descHtml": "There's a Git conflict. Resolve it in your preferred Git client, then resume syncing in GitFolder." },
+        { "title": "Changes not appearing on GitHub", "descHtml": "Check that the folder isn't paused, the sync interval hasn't elapsed yet, and the repository URL is correct. You can force a sync with \"Sync Now\"." }
+      ]
+    }
+  },
+  "gitkanban": {
+    "heading": "GitKanban",
+    "title": "In development",
+    "bodyHtml": "GitKanban's native macOS app is still being built, so there's nothing to install yet. The board format and core logic are open on <a href=\"https://github.com/silvandiepen/Gitfolder\" target=\"_blank\" rel=\"noopener\">GitHub</a> — that's the best place to follow progress, report issues, or ask questions. Want a heads-up when it ships? <a href=\"mailto:me@sil.mt?subject=Notify%20me%20about%20GitKanban\">Notify me</a>."
+  },
+  "stillStuck": {
+    "title": "Still stuck?",
+    "bodyHtml": "Email <a href=\"mailto:me@sil.mt\">me@sil.mt</a> or open an issue on <a href=\"https://github.com/silvandiepen/Gitfolder\" target=\"_blank\" rel=\"noopener\">GitHub</a> with the error message from Settings and your macOS version. Technical git output is kept in local logs so sync errors can be diagnosed without exposing details in the menu bar."
+  }
+}

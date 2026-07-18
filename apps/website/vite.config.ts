@@ -17,4 +17,10 @@ export default defineConfig({
       },
     },
   },
+  optimizeDeps: {
+    // @sil/ui's barrel pulls its Markdown component, which pulls highlight.js
+    // (CJS). esbuild mis-detects its default export during dev pre-bundling, so
+    // force it to be optimized as an interop entry. (Rollup build is unaffected.)
+    include: ['highlight.js/lib/core'],
+  },
 })

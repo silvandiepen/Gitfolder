@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Generator: Adobe Illustrator 29.0.1, SVG Export Plug-In . SVG Version: 9.03 Build 54978)  -->
-<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
-	 viewBox="0 0 144 144" style="enable-background:new 0 0 144 144;" xml:space="preserve">
-<path style="fill:none;stroke:currentColor;stroke-width:9;stroke-miterlimit:10;" d="M111.38,4.5H32.62C17.09,4.5,4.5,17.09,4.5,32.62
-	v78.75c0,15.53,12.59,28.12,28.12,28.12h78.75c15.53,0,28.12-12.59,28.12-28.12V32.62C139.5,17.09,126.91,4.5,111.38,4.5z"/>
-<path style="fill:none;stroke:currentColor;stroke-width:9;stroke-miterlimit:10;" d="M4.5,42.47h62.84c2.98,0,5.85-1.19,7.95-3.3
-	l6.07-6.07c2.11-2.11,4.97-3.3,7.95-3.3h24.43c2.98,0,5.85,1.19,7.95,3.3l6.07,6.07c2.11,2.11,4.97,3.3,7.95,3.3h3.78"/>
-<path style="fill:none;stroke:currentColor;stroke-width:9;stroke-miterlimit:10;" d="M139.5,72H76.66c-2.98,0-5.85-1.19-7.95-3.3
-	l-6.07-6.07c-2.11-2.11-4.97-3.3-7.95-3.3H30.25c-2.98,0-5.85,1.19-7.95,3.3l-6.07,6.07c-2.11,2.11-4.97,3.3-7.95,3.3H4.5"/>
-<path style="fill:none;stroke:currentColor;stroke-width:9;stroke-miterlimit:10;" d="M4.5,101.53h62.84c2.98,0,5.85-1.19,7.95-3.3
-	l6.07-6.07c2.11-2.11,4.97-3.3,7.95-3.3h24.43c2.98,0,5.85,1.19,7.95,3.3l6.07,6.07c2.11,2.11,4.97,3.3,7.95,3.3h3.78"/>
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" viewBox="0 0 144 144">
+  <style>
+    .s { fill: none; stroke: #2b3440; stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; stroke-miterlimit: 10; }
+    @media (prefers-color-scheme: dark) { .s { stroke: #c3ccd9; } }
+  </style>
+  <path class="s" d="M111.38,4.5H32.62C17.09,4.5,4.5,17.09,4.5,32.62v78.75c0,15.53,12.59,28.12,28.12,28.12h78.75c15.53,0,28.12-12.59,28.12-28.12V32.62C139.5,17.09,126.91,4.5,111.38,4.5z"/>
+  <path class="s" d="M56,44V100"/>
+  <path class="s" d="M56,72H83"/>
+  <circle class="s" cx="56" cy="44" r="8"/>
+  <circle class="s" cx="56" cy="100" r="8"/>
+  <circle class="s" cx="94" cy="72" r="8"/>
 </svg>

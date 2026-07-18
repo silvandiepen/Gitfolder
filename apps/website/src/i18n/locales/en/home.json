@@ -1,0 +1,77 @@
+{
+  "meta": {
+    "title": "GitKit — Small Mac apps built on your own git",
+    "description": "GitKit makes GitFolder and GitKanban: small, local-first macOS apps that use your own git and GitHub. No accounts, no servers — your data stays yours."
+  },
+  "hero": {
+    "eyebrow": "The GitKit family",
+    "title": "Small Mac apps, built on your own git.",
+    "subtitleHtml": "GitKit makes two focused, local-first macOS apps — <strong>GitFolder</strong> and <strong>GitKanban</strong>. Both use the git and GitHub setup you already have. No accounts, no servers, no lock-in.",
+    "ctaGitfolder": "Explore GitFolder",
+    "ctaGitkanban": "Explore GitKanban"
+  },
+  "apps": {
+    "title": "Two apps, one idea",
+    "subtitle": "Keep your work in plain files under git — and get a native Mac app that makes it effortless. Pick the one you need; they share the same principles.",
+    "items": [
+      {
+        "app": "gitfolder",
+        "name": "GitFolder",
+        "tagline": "Automatic version history for the folders on your Mac.",
+        "points": [
+          "Automatic snapshot commits when files change",
+          "Uses your existing GitHub + SSH setup",
+          "Lives quietly in the macOS menu bar"
+        ],
+        "to": "/gitfolder",
+        "cta": "Explore GitFolder",
+        "badge": "Available"
+      },
+      {
+        "app": "gitkanban",
+        "name": "GitKanban",
+        "tagline": "A native kanban board whose only data source is a git repo of markdown.",
+        "points": [
+          "Your board is a git repo of markdown files",
+          "One file = one card; history comes from git",
+          "Agents and scripts can populate it headlessly"
+        ],
+        "to": "/gitkanban",
+        "cta": "Explore GitKanban",
+        "badge": "Coming soon"
+      }
+    ]
+  },
+  "principles": {
+    "title": "What every GitKit app shares",
+    "subtitle": "The same promises hold across the family — because the data is always just your files in your git.",
+    "features": [
+      {
+        "icon": "lock",
+        "title": "Local-first & private",
+        "desc": "No GitKit account, no cloud service. Your files move directly between your Mac and the git host you already use."
+      },
+      {
+        "icon": "git-branch",
+        "title": "Your own git",
+        "desc": "Both apps read and write plain git repositories you own. Nothing is locked into a proprietary format or backend."
+      },
+      {
+        "icon": "github",
+        "title": "Built on GitHub",
+        "desc": "They lean on the Git and SSH configuration already on your Mac — the same repos, keys, and permissions you trust."
+      },
+      {
+        "icon": "menu",
+        "title": "Native macOS",
+        "desc": "Small, focused, and Mac-native — each app does one thing well and stays out of your way."
+      }
+    ]
+  },
+  "cta": {
+    "title": "Own your data. Start with GitFolder.",
+    "subtitle": "Available on the Mac App Store today — GitKanban is on the way.",
+    "primary": "Explore GitFolder",
+    "secondary": "See GitKanban"
+  }
+}

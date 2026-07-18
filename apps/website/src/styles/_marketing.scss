@@ -1,0 +1,304 @@
+// ==========================================================================
+// Shared marketing primitives (.mkt)
+// One source of truth for the container, buttons, hero, feature cards, section
+// headings, badges and CTA band used by the home + product pages. Everything is
+// driven by @sil/ui tokens + --color-accent*, so a page/section that sets
+// [data-app] themes itself automatically (turquoise = GitFolder, warm red =
+// GitKanban, slate = shell).
+// ==========================================================================
+
+@use 'mixins' as *;
+
+.mkt {
+  // ── Layout ───────────────────────────────────────────────────────────
+  @include e(container) {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 0 var(--space-l);
+    width: 100%;
+
+    @include mobile { padding: 0 var(--space); }
+  }
+
+  @include e(container-narrow) {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 0 var(--space-l);
+    width: 100%;
+
+    @include mobile { padding: 0 var(--space); }
+  }
+
+  // ── Eyebrow / badge ──────────────────────────────────────────────────
+  @include e(eyebrow) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-s);
+    font-size: var(--font-size-s);
+    font-weight: var(--font-weight-semibold);
+    color: var(--accent-legible);
+    margin-bottom: var(--space-s);
+    letter-spacing: 0.01em;
+  }
+
+  @include e(badge) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    padding: var(--space-xs) var(--space-s);
+    border-radius: var(--radius-pill);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: var(--color-accent-tint);
+    color: var(--accent-legible);
+    border: var(--border-width) solid color-mix(in srgb, var(--color-accent) 24%, transparent);
+  }
+
+  // ── Buttons ──────────────────────────────────────────────────────────
+  @include e(btn-pill) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-s);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-light);
+    background: var(--color-accent-dark);
+    padding: var(--space-s) var(--space-l);
+    border-radius: var(--radius-pill);
+    font-size: var(--font-size-s);
+    transition: transform var(--transition-fast), filter var(--transition-fast);
+    text-decoration: none;
+
+    &:hover {
+      color: var(--color-light);
+      filter: brightness(0.92);
+      transform: translateY(-1px);
+    }
+
+    @include m(lg) {
+      font-size: var(--font-size);
+      padding: var(--space) var(--space-l);
+    }
+  }
+
+  @include e(btn-outline) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-s);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-foreground);
+    background: transparent;
+    border: var(--border-width) solid var(--color-border);
+    padding: var(--space-s) var(--space);
+    border-radius: var(--radius-pill);
+    font-size: var(--font-size-s);
+    transition: border-color var(--transition-fast), color var(--transition-fast);
+    text-decoration: none;
+
+    &:hover {
+      border-color: var(--color-accent);
+      color: var(--accent-legible);
+    }
+
+    @include m(inverse) {
+      border-color: color-mix(in srgb, var(--color-light) 40%, transparent);
+      color: var(--color-light);
+
+      &:hover {
+        border-color: var(--color-light);
+        color: var(--color-light);
+      }
+    }
+  }
+
+  // ── Section headings ─────────────────────────────────────────────────
+  @include e(section) {
+    padding: var(--space-xl) 0;
+
+    @include mobile { padding: var(--space-l) 0; }
+  }
+
+  @include e(section-head) {
+    max-width: 620px;
+    margin-bottom: var(--space-l);
+  }
+
+  @include e(section-title) {
+    font-size: var(--font-size-xxl);
+    font-weight: var(--font-weight-bold);
+    letter-spacing: -0.02em;
+    line-height: var(--line-height-tight);
+    margin-bottom: var(--space-s);
+  }
+
+  @include e(section-subtitle) {
+    font-size: var(--font-size-m);
+    color: var(--color-muted);
+    line-height: var(--line-height-relaxed);
+  }
+
+  // ── Hero ─────────────────────────────────────────────────────────────
+  @include e(hero) {
+    position: relative;
+    padding: var(--space-xl) 0 var(--space-l);
+    overflow: hidden;
+
+    @include mobile { padding: var(--space-l) 0; }
+  }
+
+  @include e(hero-grid) {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(260px, 0.9fr);
+    gap: var(--space-l);
+    align-items: center;
+
+    @include tablet {
+      grid-template-columns: 1fr;
+      gap: var(--space-l);
+    }
+  }
+
+  @include e(hero-copy) {
+    max-width: 640px;
+  }
+
+  @include e(hero-title) {
+    font-size: var(--font-size-display);
+    font-weight: var(--font-weight-bold);
+    line-height: 1.08;
+    letter-spacing: -0.03em;
+    margin-bottom: var(--space);
+  }
+
+  @include e(hero-subtitle) {
+    font-size: var(--font-size-m);
+    color: var(--color-muted);
+    line-height: var(--line-height-relaxed);
+    margin-bottom: var(--space-l);
+  }
+
+  @include e(hero-actions) {
+    display: flex;
+    align-items: center;
+    gap: var(--space-s);
+    flex-wrap: wrap;
+  }
+
+  // Decorative brand-tinted panel behind hero artwork.
+  @include e(hero-art) {
+    position: relative;
+    min-height: 300px;
+    display: grid;
+    place-items: center;
+    color: var(--color-accent);
+
+    &::before {
+      content: '';
+      position: absolute;
+      inset: var(--space-s);
+      border-radius: var(--border-radius-xxl);
+      background:
+        radial-gradient(circle at 26% 20%, color-mix(in srgb, var(--color-accent) 24%, transparent), transparent 42%),
+        linear-gradient(140deg, color-mix(in srgb, var(--color-accent) 16%, var(--surface)), var(--surface));
+      border: var(--border-width) solid var(--color-border-light);
+      box-shadow: var(--shadow-l);
+    }
+  }
+
+  @include e(hero-mark) {
+    position: relative;
+    z-index: 1;
+    color: var(--color-accent);
+    filter: drop-shadow(0 16px 32px color-mix(in srgb, var(--color-accent) 30%, transparent));
+  }
+
+  // ── Feature grid + cards ─────────────────────────────────────────────
+  @include e(grid) {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space);
+
+    @include tablet { grid-template-columns: repeat(2, 1fr); }
+    @include mobile { grid-template-columns: 1fr; }
+  }
+
+  @include e(card) {
+    background: var(--surface);
+    border-radius: var(--border-radius-xxl);
+    border: var(--border-width) solid var(--color-border-light);
+    padding: var(--space-l);
+    transition: border-color var(--transition), transform var(--transition);
+
+    &:hover {
+      border-color: color-mix(in srgb, var(--color-accent) 40%, var(--color-border));
+      transform: translateY(-2px);
+    }
+  }
+
+  @include e(card-icon) {
+    width: var(--space-l);
+    height: var(--space-l);
+    border-radius: var(--border-radius-xl);
+    background: var(--color-accent-tint);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: var(--space);
+    color: var(--accent-legible);
+  }
+
+  @include e(card-title) {
+    font-size: var(--font-size-m);
+    font-weight: var(--font-weight-semibold);
+    margin-bottom: var(--space-xs);
+  }
+
+  @include e(card-desc) {
+    font-size: var(--font-size-s);
+    color: var(--color-muted);
+    line-height: var(--line-height-relaxed);
+  }
+
+  // ── CTA band ─────────────────────────────────────────────────────────
+  @include e(cta) {
+    padding: var(--space-xl) 0;
+    text-align: center;
+    background:
+      linear-gradient(140deg, var(--color-accent-dark), color-mix(in srgb, var(--color-accent-dark) 70%, #000));
+    color: var(--color-light);
+  }
+
+  @include e(cta-title) {
+    font-size: var(--font-size-xxl);
+    font-weight: var(--font-weight-bold);
+    letter-spacing: -0.02em;
+    margin-bottom: var(--space-s);
+    color: var(--color-light);
+  }
+
+  @include e(cta-subtitle) {
+    font-size: var(--font-size-m);
+    opacity: 0.9;
+    margin-bottom: var(--space-l);
+    color: var(--color-light);
+  }
+
+  @include e(cta-actions) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-s);
+    flex-wrap: wrap;
+
+    .mkt__btn-pill {
+      background: var(--color-light);
+      color: var(--color-accent-dark);
+
+      &:hover {
+        color: var(--color-accent-dark);
+        filter: brightness(0.96);
+      }
+    }
+  }
+}

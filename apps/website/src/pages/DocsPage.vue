@@ -2,22 +2,93 @@
 /**
  * @view DocsPage
  * Documentation page with sidebar navigation, matching Kod's DocsView pattern.
+ * All copy is loaded from `i18n/locales/<locale>/docs.json` so it can be translated.
  */
 import { ref } from 'vue'
 import MarketingLayout from '@/components/MarketingLayout.vue'
-import { appStoreUrl } from '../links'
+import { usePageMeta } from '@/lib/usePageMeta'
+import { useContent } from '@/i18n'
 
-const activeSection = ref('getting-started')
+interface StepItem {
+  title: string
+  html: string
+}
 
-const sections = [
-  { id: 'getting-started', label: 'Getting Started' },
-  { id: 'install', label: 'Installation' },
-  { id: 'adding-folders', label: 'Adding Folders' },
-  { id: 'sync-settings', label: 'Sync Settings' },
-  { id: 'ssh-keys', label: 'SSH Keys' },
-  { id: 'troubleshooting', label: 'Troubleshooting' },
-  { id: 'faq', label: 'FAQ' },
-]
+interface SpecItem {
+  term: string
+  html: string
+}
+
+interface FaqItem {
+  q: string
+  html: string
+}
+
+interface StepsBlock {
+  type: 'steps'
+  items: StepItem[]
+}
+
+interface ProseBlock {
+  type: 'prose'
+  html: string
+}
+
+interface ListBlock {
+  type: 'list'
+  items: string[]
+}
+
+interface CalloutBlock {
+  type: 'callout'
+  variant: 'info' | 'warning'
+  icon: string
+  title: string
+  html: string
+}
+
+interface SpecsBlock {
+  type: 'specs'
+  items: SpecItem[]
+}
+
+interface FaqBlock {
+  type: 'faq'
+  items: FaqItem[]
+}
+
+type DocsBlock =
+  | StepsBlock
+  | ProseBlock
+  | ListBlock
+  | CalloutBlock
+  | SpecsBlock
+  | FaqBlock
+
+interface DocsSection {
+  id: string
+  label: string
+  title: string
+  blocks: DocsBlock[]
+}
+
+interface DocsContent {
+  meta: { title: string; description: string }
+  sidebarTitle: string
+  sidebarNoteHtml: string
+  sections: DocsSection[]
+}
+
+const t = useContent<DocsContent>('docs')
+
+usePageMeta({
+  title: t.meta.title,
+  description: t.meta.description,
+})
+
+const sections = t.sections.map((s) => ({ id: s.id, label: s.label }))
+
+const activeSection = ref(sections[0]?.id ?? '')
 
 function scrollTo(id: string) {
   activeSection.value = id
@@ -27,12 +98,14 @@ function scrollTo(id: string) {
 
 <template>
   <MarketingLayout>
-    <div class="docs">
+    <div class="docs" data-app="gitfolder">
       <div class="docs__container">
         <div class="docs__layout">
           <!-- Sidebar -->
           <aside class="docs__sidebar">
-            <h3 class="docs__sidebar-title">Documentation</h3>
+            <h3 class="docs__sidebar-title">{{ t.sidebarTitle }}</h3>
+            <!-- eslint-disable-next-line vue/no-v-html -->
+            <p class="docs__sidebar-note" v-html="t.sidebarNoteHtml" />
             <nav class="docs__sidebar-nav">
               <button
                 v-for="s in sections"
@@ -48,202 +121,69 @@ function scrollTo(id: string) {
 
           <!-- Content -->
           <div class="docs__content">
-            <!-- Getting Started -->
-            <section id="getting-started" class="docs__section">
-              <h2 class="docs__section-title">Getting Started</h2>
-              <div class="docs__steps">
-                <div class="docs__step">
-                  <span class="docs__step-num">1</span>
-                  <div>
-                    <h4>Install GitFolder</h4>
-                    <p><a :href="appStoreUrl" target="_blank" rel="noopener">Download GitFolder from the Mac App Store</a>. It lives in your menu bar — no dock icon.</p>
-                  </div>
-                </div>
-                <div class="docs__step">
-                  <span class="docs__step-num">2</span>
-                  <div>
-                    <h4>Make sure Git is installed</h4>
-                    <p>GitFolder uses your system Git. Open Terminal and run <code>git --version</code> to verify. If Git isn't installed, macOS will prompt you to install Xcode Command Line Tools.</p>
-                  </div>
-                </div>
-                <div class="docs__step">
-                  <span class="docs__step-num">3</span>
-                  <div>
-                    <h4>Set up GitHub SSH</h4>
-                    <p>GitFolder pushes over SSH. Make sure <code>ssh -T git@github.com</code> works in Terminal. If you need to set up SSH keys, follow <a href="https://docs.github.com/en/authentication/connecting-to-github-with-ssh" target="_blank" rel="noopener">GitHub's SSH guide</a>.</p>
-                  </div>
-                </div>
-              </div>
-            </section>
+            <section
+              v-for="section in t.sections"
+              :id="section.id"
+              :key="section.id"
+              class="docs__section"
+            >
+              <h2 class="docs__section-title">{{ section.title }}</h2>
 
-            <!-- Installation -->
-            <section id="install" class="docs__section">
-              <h2 class="docs__section-title">Installation</h2>
-              <div class="docs__steps">
-                <div class="docs__step">
-                  <span class="docs__step-num">1</span>
-                  <div>
-                    <h4>Mac App Store</h4>
-                    <p><a :href="appStoreUrl" target="_blank" rel="noopener">Get GitFolder from the Mac App Store</a>. It's a single purchase — no subscription.</p>
+              <template v-for="(block, i) in section.blocks" :key="i">
+                <!-- Steps -->
+                <div v-if="block.type === 'steps'" class="docs__steps">
+                  <div v-for="(step, si) in block.items" :key="si" class="docs__step">
+                    <span class="docs__step-num">{{ si + 1 }}</span>
+                    <div>
+                      <h4>{{ step.title }}</h4>
+                      <!-- eslint-disable-next-line vue/no-v-html -->
+                      <p v-html="step.html" />
+                    </div>
                   </div>
                 </div>
-                <div class="docs__step">
-                  <span class="docs__step-num">2</span>
-                  <div>
-                    <h4>Launch and open Settings</h4>
-                    <p>Click the folder icon in the menu bar, then click the gear icon to open Settings. This is where you configure Git identity and add folders.</p>
+
+                <!-- Prose -->
+                <!-- eslint-disable-next-line vue/no-v-html -->
+                <p v-else-if="block.type === 'prose'" v-html="block.html" />
+
+                <!-- List -->
+                <ul v-else-if="block.type === 'list'" class="docs__list">
+                  <!-- eslint-disable-next-line vue/no-v-html -->
+                  <li v-for="(item, li) in block.items" :key="li" v-html="item" />
+                </ul>
+
+                <!-- Specs -->
+                <div v-else-if="block.type === 'specs'" class="docs__specs">
+                  <div v-for="(spec, spi) in block.items" :key="spi" class="docs__spec">
+                    <span class="docs__spec-label">{{ spec.term }}</span>
+                    <!-- eslint-disable-next-line vue/no-v-html -->
+                    <span class="docs__spec-value" v-html="spec.html" />
                   </div>
                 </div>
-              </div>
-            </section>
 
-            <!-- Adding Folders -->
-            <section id="adding-folders" class="docs__section">
-              <h2 class="docs__section-title">Adding Folders</h2>
-              <div class="docs__steps">
-                <div class="docs__step">
-                  <span class="docs__step-num">1</span>
+                <!-- Callout -->
+                <div
+                  v-else-if="block.type === 'callout'"
+                  class="docs__callout"
+                  :class="`docs__callout--${block.variant}`"
+                >
+                  <div class="docs__callout-icon">{{ block.icon }}</div>
                   <div>
-                    <h4>Open Settings → Repositories</h4>
-                    <p>Click the folder icon in the menu bar, then the gear icon. Go to the Repositories tab and click "Add Repository…".</p>
+                    <h4>{{ block.title }}</h4>
+                    <!-- eslint-disable-next-line vue/no-v-html -->
+                    <div v-html="block.html" />
                   </div>
                 </div>
-                <div class="docs__step">
-                  <span class="docs__step-num">2</span>
-                  <div>
-                    <h4>Choose a local folder</h4>
-                    <p>Use the macOS folder picker to select the folder you want to version. GitFolder will request access to this folder.</p>
+
+                <!-- FAQ -->
+                <div v-else-if="block.type === 'faq'" class="docs__faq">
+                  <div v-for="(item, fi) in block.items" :key="fi" class="docs__faq-item">
+                    <h4>{{ item.q }}</h4>
+                    <!-- eslint-disable-next-line vue/no-v-html -->
+                    <p v-html="item.html" />
                   </div>
                 </div>
-                <div class="docs__step">
-                  <span class="docs__step-num">3</span>
-                  <div>
-                    <h4>Paste a GitHub SSH URL</h4>
-                    <p>Enter the SSH URL of the repository you want to push to, like <code>git@github.com:yourname/my-folder-backup.git</code>.</p>
-                  </div>
-                </div>
-                <div class="docs__step">
-                  <span class="docs__step-num">4</span>
-                  <div>
-                    <h4>Choose branch and interval</h4>
-                    <p>Pick a branch name (default: <code>main</code>) and a sync interval (5, 15, 30, or 60 minutes). Click "Add and Sync" — GitFolder will run the first snapshot.</p>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <!-- Sync Settings -->
-            <section id="sync-settings" class="docs__section">
-              <h2 class="docs__section-title">Sync Settings</h2>
-              <p>Configure syncing behavior in Settings → General:</p>
-              <ul class="docs__list">
-                <li><strong>Pause all syncing</strong> — temporarily stop all folder snapshots</li>
-                <li><strong>Default interval</strong> — the default sync interval for new folders (5, 15, 30, or 60 minutes)</li>
-                <li><strong>Per-folder override</strong> — each folder can have its own interval, branch, and pause state</li>
-              </ul>
-              <div class="docs__callout docs__callout--info">
-                <div class="docs__callout-icon">💡</div>
-                <div>
-                  <h4>Sync All Now</h4>
-                  <p>Click "Sync All Now" in the General tab or in the menu bar to trigger an immediate snapshot for all active folders, regardless of their interval.</p>
-                </div>
-              </div>
-            </section>
-
-            <!-- SSH Keys -->
-            <section id="ssh-keys" class="docs__section">
-              <h2 class="docs__section-title">SSH Keys</h2>
-              <p>GitFolder uses SSH to push to GitHub. In most cases your existing SSH setup works out of the box.</p>
-
-              <div class="docs__specs">
-                <div class="docs__spec">
-                  <span class="docs__spec-label">Default</span>
-                  <span class="docs__spec-value">Uses system <code>~/.ssh</code></span>
-                </div>
-                <div class="docs__spec">
-                  <span class="docs__spec-label">Custom key</span>
-                  <span class="docs__spec-value">Choose a specific key in Settings → SSH</span>
-                </div>
-                <div class="docs__spec">
-                  <span class="docs__spec-label">Sandbox</span>
-                  <span class="docs__spec-value">Mac App Store builds may need explicit key selection</span>
-                </div>
-              </div>
-
-              <div class="docs__callout docs__callout--warning">
-                <div class="docs__callout-icon">⚠️</div>
-                <div>
-                  <h4>Mac App Store sandbox</h4>
-                  <p>Sandboxed apps can't access <code>~/.ssh</code> directly. If you're using the Mac App Store version, go to Settings → SSH and choose your SSH private key file explicitly.</p>
-                </div>
-              </div>
-            </section>
-
-            <!-- Troubleshooting -->
-            <section id="troubleshooting" class="docs__section">
-              <h2 class="docs__section-title">Troubleshooting</h2>
-
-              <div class="docs__callout docs__callout--warning">
-                <div class="docs__callout-icon">⚠️</div>
-                <div>
-                  <h4>Folder shows "Error" status</h4>
-                  <p>Check the error message in Settings → Repositories. Common causes:</p>
-                  <ul class="docs__list">
-                    <li>SSH key not configured or not accessible</li>
-                    <li>Repository URL is wrong or you don't have push access</li>
-                    <li>Branch doesn't exist yet and can't be created</li>
-                    <li>Git conflict — resolve it manually in your Git client, then GitFolder will resume</li>
-                  </ul>
-                </div>
-              </div>
-
-              <div class="docs__steps" style="margin-top: 24px;">
-                <div class="docs__step">
-                  <span class="docs__step-num">1</span>
-                  <div>
-                    <h4>Verify Git is installed</h4>
-                    <p>Open Terminal and run <code>git --version</code>. If not found, install Xcode Command Line Tools with <code>xcode-select --install</code>.</p>
-                  </div>
-                </div>
-                <div class="docs__step">
-                  <span class="docs__step-num">2</span>
-                  <div>
-                    <h4>Test SSH access</h4>
-                    <p>Run <code>ssh -T git@github.com</code> in Terminal. You should see your GitHub username in the response.</p>
-                  </div>
-                </div>
-                <div class="docs__step">
-                  <span class="docs__step-num">3</span>
-                  <div>
-                    <h4>Check the repository URL</h4>
-                    <p>Make sure the URL in GitFolder matches the SSH URL shown on your GitHub repository page. It should start with <code>git@github.com:</code>.</p>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <!-- FAQ -->
-            <section id="faq" class="docs__section">
-              <h2 class="docs__section-title">FAQ</h2>
-
-              <div class="docs__faq">
-                <div class="docs__faq-item">
-                  <h4>Does GitFolder read my file contents?</h4>
-                  <p>No. GitFolder uses Git to track changes. Git creates commits from your files — GitFolder just triggers the process. Your file data goes directly to your GitHub repository over SSH.</p>
-                </div>
-                <div class="docs__faq-item">
-                  <h4>Can I use it with GitLab, Bitbucket, or self-hosted Git?</h4>
-                  <p>GitFolder is designed for GitHub SSH URLs. Other Git hosts that support SSH may work if the URL format and authentication are compatible, but only GitHub is officially supported.</p>
-                </div>
-                <div class="docs__faq-item">
-                  <h4>What happens if there's a merge conflict?</h4>
-                  <p>GitFolder pauses the folder and shows a "Needs attention" status. Resolve the conflict in your preferred Git client, then resume syncing in GitFolder.</p>
-                </div>
-                <div class="docs__faq-item">
-                  <h4>Does it need a GitFolder account?</h4>
-                  <p>No. There is no GitFolder account, no cloud service, and no backend server. Everything runs locally on your Mac.</p>
-                </div>
-              </div>
+              </template>
             </section>
           </div>
         </div>
@@ -252,20 +192,20 @@ function scrollTo(id: string) {
   </MarketingLayout>
 </template>
 
-<style lang="scss" scoped>
+<style lang="scss">
 .docs {
   &__container {
     max-width: 1120px;
     margin: 0 auto;
-    padding: 0 32px;
+    padding: 0 var(--space-l);
   }
 
   @include e(layout) {
     display: grid;
     grid-template-columns: 220px 1fr;
-    gap: 48px;
-    padding-top: 48px;
-    padding-bottom: 96px;
+    gap: var(--space-xl);
+    padding-top: var(--space-xl);
+    padding-bottom: var(--space-xxl);
 
     @include tablet {
       grid-template-columns: 1fr;
@@ -286,35 +226,48 @@ function scrollTo(id: string) {
     font-weight: var(--font-weight-semibold);
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: var(--color-text-tertiary);
-    margin-bottom: 16px;
+    color: var(--color-subtle);
+    margin-bottom: var(--space-s);
+  }
+
+  @include e(sidebar-note) {
+    font-size: var(--font-size-xs);
+    color: var(--color-subtle);
+    line-height: var(--line-height-relaxed);
+    margin-bottom: var(--space);
+
+    a {
+      color: var(--accent-legible);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
   }
 
   @include e(sidebar-nav) {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--space-xs);
   }
 
   @include e(sidebar-link) {
     display: block;
     text-align: left;
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-s);
     font-weight: var(--font-weight-medium);
-    color: var(--color-text-secondary);
-    padding: 8px 12px;
-    border-radius: 8px;
+    color: var(--color-muted);
+    padding: var(--space-s) var(--space-s);
+    border-radius: var(--border-radius-l);
     transition: all var(--transition-fast);
     background: transparent;
     cursor: pointer;
 
     &:hover {
-      color: var(--color-text-primary);
-      background: var(--color-surface-raised);
+      color: var(--color-foreground);
+      background: var(--surface-raised);
     }
 
     @include m(active) {
-      color: var(--color-accent);
+      color: var(--accent-legible);
       background: var(--color-accent-tint);
     }
   }
@@ -325,29 +278,29 @@ function scrollTo(id: string) {
   }
 
   @include e(section) {
-    padding-top: 48px;
+    padding-top: var(--space-xl);
     &:first-child { padding-top: 0; }
   }
 
   @include e(section-title) {
     font-size: var(--font-size-xl);
     font-weight: var(--font-weight-bold);
-    margin-bottom: 24px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid var(--color-border-light);
+    margin-bottom: var(--space-l);
+    padding-bottom: var(--space-s);
+    border-bottom: var(--border-width) solid var(--color-border-light);
   }
 
   p {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
+    font-size: var(--font-size-s);
+    color: var(--color-muted);
     line-height: var(--line-height-relaxed);
-    margin-bottom: 16px;
+    margin-bottom: var(--space);
 
     code {
-      background: var(--color-surface-raised);
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-family: 'SF Mono', 'Fira Code', monospace;
+      background: var(--surface-raised);
+      padding: var(--space-xs) var(--space-xs);
+      border-radius: var(--border-radius);
+      font-family: var(--font-family-monospace);
       font-size: var(--font-size-xs);
     }
   }
@@ -356,22 +309,22 @@ function scrollTo(id: string) {
   @include e(steps) {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: var(--space);
   }
 
   @include e(step) {
     display: flex;
-    gap: 16px;
+    gap: var(--space);
     align-items: flex-start;
 
     h4 {
       font-weight: var(--font-weight-semibold);
-      margin-bottom: 4px;
+      margin-bottom: var(--space-xs);
     }
 
     p {
-      font-size: var(--font-size-sm);
-      color: var(--color-text-secondary);
+      font-size: var(--font-size-s);
+      color: var(--color-muted);
       line-height: var(--line-height-relaxed);
     }
   }
@@ -382,8 +335,8 @@ function scrollTo(id: string) {
     height: 32px;
     border-radius: 50%;
     background: var(--color-accent-tint);
-    color: var(--color-accent);
-    font-size: var(--font-size-sm);
+    color: var(--accent-legible);
+    font-size: var(--font-size-s);
     font-weight: var(--font-weight-semibold);
     display: flex;
     align-items: center;
@@ -392,22 +345,22 @@ function scrollTo(id: string) {
 
   // Lists
   @include e(list) {
-    padding-left: 20px;
+    padding-left: var(--space);
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--space-s);
 
     li {
-      font-size: var(--font-size-sm);
-      color: var(--color-text-secondary);
+      font-size: var(--font-size-s);
+      color: var(--color-muted);
       line-height: var(--line-height-relaxed);
       list-style: disc;
 
       code {
-        background: var(--color-surface-raised);
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-family: 'SF Mono', 'Fira Code', monospace;
+        background: var(--surface-raised);
+        padding: var(--space-xs) var(--space-xs);
+        border-radius: var(--border-radius);
+        font-family: var(--font-family-monospace);
         font-size: var(--font-size-xs);
       }
     }
@@ -416,37 +369,37 @@ function scrollTo(id: string) {
   // Callouts
   @include e(callout) {
     display: flex;
-    gap: 16px;
-    padding: 20px 24px;
-    border-radius: 16px;
-    margin-top: 24px;
+    gap: var(--space);
+    padding: var(--space) var(--space-l);
+    border-radius: var(--border-radius-xxl);
+    margin-top: var(--space-l);
 
     @include m(warning) {
       background: #fef3cd;
-      border: 1px solid color-mix(in srgb, #ffc92c, transparent 60%);
+      border: var(--border-width) solid color-mix(in srgb, #ffc92c, transparent 60%);
     }
 
     @include m(info) {
       background: var(--color-accent-tint);
-      border: 1px solid color-mix(in srgb, var(--color-accent), transparent 60%);
+      border: var(--border-width) solid color-mix(in srgb, var(--color-accent), transparent 60%);
     }
 
     h4 {
       font-weight: var(--font-weight-semibold);
-      margin-bottom: 6px;
+      margin-bottom: var(--space-xs);
     }
 
     p {
-      font-size: var(--font-size-sm);
-      color: var(--color-text-secondary);
+      font-size: var(--font-size-s);
+      color: var(--color-muted);
       line-height: var(--line-height-relaxed);
     }
   }
 
   @include e(callout-icon) {
-    font-size: 20px;
+    font-size: var(--font-size-l);
     flex-shrink: 0;
-    margin-top: 2px;
+    margin-top: var(--space-xs);
   }
 
   // Specs table
@@ -455,54 +408,54 @@ function scrollTo(id: string) {
     flex-direction: column;
     gap: 1px;
     background: var(--color-border-light);
-    border-radius: 16px;
+    border-radius: var(--border-radius-xxl);
     overflow: hidden;
-    margin-bottom: 24px;
+    margin-bottom: var(--space-l);
   }
 
   @include e(spec) {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 14px 20px;
-    background: var(--color-surface);
+    padding: var(--space-s) var(--space);
+    background: var(--surface);
 
     code {
-      background: var(--color-surface-raised);
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-family: 'SF Mono', 'Fira Code', monospace;
+      background: var(--surface-raised);
+      padding: var(--space-xs) var(--space-xs);
+      border-radius: var(--border-radius);
+      font-family: var(--font-family-monospace);
       font-size: var(--font-size-xs);
     }
   }
 
   @include e(spec-label) {
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-s);
     font-weight: var(--font-weight-semibold);
   }
 
   @include e(spec-value) {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
+    font-size: var(--font-size-s);
+    color: var(--color-muted);
   }
 
   // FAQ
   @include e(faq) {
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    gap: var(--space-l);
   }
 
   @include e(faq-item) {
     h4 {
-      font-size: var(--font-size-base);
+      font-size: var(--font-size);
       font-weight: var(--font-weight-semibold);
-      margin-bottom: 8px;
+      margin-bottom: var(--space-s);
     }
 
     p {
-      font-size: var(--font-size-sm);
-      color: var(--color-text-secondary);
+      font-size: var(--font-size-s);
+      color: var(--color-muted);
       line-height: var(--line-height-relaxed);
     }
   }

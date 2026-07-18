@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="GitFolder — Automatic version history for your folders. A small macOS menu bar app." />
-    <title>GitFolder — Automatic version history for folders</title>
+    <meta name="description" content="GitKit makes GitFolder and GitKanban — small, local-first macOS apps built on your own git and GitHub. No accounts, no servers." />
+    <title>GitKit — Small Mac apps built on your own git</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -18,9 +18,10 @@
     <script>
       // Apply color mode before paint to avoid flash
       (function() {
-        var m = localStorage.getItem('gitfolder-color-mode');
+        var m = localStorage.getItem('gitkit-color-mode');
         var mode = (m === 'light' || m === 'dark') ? m : 'dark';
         document.documentElement.setAttribute('data-color-mode', mode);
+        document.documentElement.setAttribute('data-theme', mode);
       })();
     </script>
     <div id="app"></div>

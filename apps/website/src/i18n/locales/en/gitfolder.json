@@ -1,0 +1,40 @@
+{
+  "meta": {
+    "title": "GitFolder — Automatic version history for your folders",
+    "description": "GitFolder watches selected folders on your Mac and creates quiet GitHub snapshot commits when files change. Local-first, no account, uses your own git."
+  },
+  "hero": {
+    "eyebrow": "macOS menu bar utility",
+    "title": "Automatic version history for your folders.",
+    "subtitle": "GitFolder watches selected folders on your Mac and creates quiet GitHub snapshot commits when files change. No cloud service. No account. Just local-first versioning.",
+    "download": "Download on the Mac App Store",
+    "docs": "Read the docs"
+  },
+  "steps": {
+    "title": "Simple app, simple setup",
+    "subtitle": "Pick a folder, connect a GitHub repo, choose an interval. That's it.",
+    "items": [
+      { "n": "1", "title": "Pick a folder", "desc": "Choose any folder on your Mac you want versioned." },
+      { "n": "2", "title": "Connect a repo", "desc": "Point it at a GitHub repository you own, using your existing SSH access." },
+      { "n": "3", "title": "Choose an interval", "desc": "Set how often it snapshots — then forget about it." }
+    ]
+  },
+  "features": {
+    "title": "Everything it does",
+    "subtitle": "A small macOS app that does one thing well.",
+    "items": [
+      { "icon": "folder", "title": "Select your folders", "desc": "Pick any folder on your Mac. GitFolder watches it and creates snapshot commits when files change." },
+      { "icon": "github", "title": "Your GitHub, your repos", "desc": "Uses your existing GitHub SSH setup. Files go only to repositories you choose — nothing touches GitFolder servers." },
+      { "icon": "clock", "title": "Automatic intervals", "desc": "Set sync intervals per folder — 5, 15, 30, or 60 minutes. GitFolder works quietly in the background." },
+      { "icon": "lock", "title": "Local-first and private", "desc": "No GitFolder account needed. No cloud service. Your files move directly from your Mac to your GitHub repos." },
+      { "icon": "terminal", "title": "Uses your Git setup", "desc": "Leverages the Git and SSH configuration you already have. No bundled Git, no separate keys unless you want them." },
+      { "icon": "menu", "title": "Menu bar app", "desc": "Lives in the macOS menu bar. Check sync status, pause syncing, or trigger a manual sync — all from the menu." }
+    ]
+  },
+  "cta": {
+    "title": "Version your folders, quietly.",
+    "subtitle": "Available now on the Mac App Store.",
+    "download": "Download on the Mac App Store",
+    "docs": "Read the docs"
+  }
+}

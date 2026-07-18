@@ -1,0 +1,45 @@
+{
+  "brand": {
+    "name": "GitKit",
+    "tagline": "Small, local-first Mac apps built on your own git."
+  },
+  "nav": [
+    { "label": "GitFolder", "to": "/gitfolder" },
+    { "label": "GitKanban", "to": "/gitkanban" },
+    { "label": "Docs", "to": "/docs" },
+    { "label": "Support", "to": "/support" }
+  ],
+  "githubLabel": "GitHub",
+  "skipToContent": "Skip to content",
+  "actions": {
+    "toLight": "Switch to light mode",
+    "toDark": "Switch to dark mode"
+  },
+  "footer": {
+    "columns": [
+      {
+        "heading": "Products",
+        "links": [
+          { "label": "GitFolder", "to": "/gitfolder" },
+          { "label": "GitKanban", "to": "/gitkanban" }
+        ]
+      },
+      {
+        "heading": "Resources",
+        "links": [
+          { "label": "Docs", "to": "/docs" },
+          { "label": "Support", "to": "/support" },
+          { "label": "GitHub", "href": "https://github.com/silvandiepen/Gitfolder", "external": true }
+        ]
+      },
+      {
+        "heading": "Legal",
+        "links": [
+          { "label": "Privacy", "to": "/privacy" },
+          { "label": "Terms", "to": "/terms" }
+        ]
+      }
+    ],
+    "copy": "GitKit. All rights reserved."
+  }
+}

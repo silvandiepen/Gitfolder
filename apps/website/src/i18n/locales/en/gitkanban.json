@@ -1,0 +1,38 @@
+{
+  "meta": {
+    "title": "GitKanban — Your kanban board is a git repo",
+    "description": "GitKanban is a native macOS kanban board whose only data source is a git repo of markdown files. One file = one card, history from git, agent-friendly. Coming soon."
+  },
+  "hero": {
+    "badge": "Coming soon",
+    "title": "Your kanban board is a git repo.",
+    "subtitle": "GitKanban is a native macOS kanban board whose only data source is a git repo of markdown files. Every edit is a change to a file and a commit; sync is a pull and a push against your own remote. No backend, no accounts.",
+    "notify": "Notify me when it's ready",
+    "github": "Star on GitHub"
+  },
+  "features": {
+    "title": "A board made of plain files",
+    "subtitle": "The board logic already exists as an open TypeScript core. The native Mac app is in development — here's what it renders.",
+    "items": [
+      { "icon": "columns", "title": "Your board is a git repo", "desc": "Point it at a repo and folder of markdown files. There is no backend and no hosted database — the board is a folder you own." },
+      { "icon": "file", "title": "One file = one card", "desc": "Each card is a markdown file: YAML frontmatter for machines, a markdown body for humans. Anything that reads a folder can read your board." },
+      { "icon": "git-branch", "title": "A column is a field", "desc": "Moving a card changes one line in one file (status: todo → done). The file never moves, so git history stays continuous and diffs stay tiny." },
+      { "icon": "history", "title": "History from git", "desc": "Every card's journey — who moved it and when — is read straight from git log. No separate activity database to trust." },
+      { "icon": "bot", "title": "Agent-friendly by design", "desc": "Because the board is just files, agents, CI, and scripts write cards and push like any other client. A human curates; a fleet populates." },
+      { "icon": "check", "title": "Validated & lenient", "desc": "Cards are validated against a board config with root → project inheritance, while unknown frontmatter round-trips untouched." }
+    ]
+  },
+  "status": {
+    "badge": "In development",
+    "title": "Where GitKanban is today",
+    "text": "The board model — parsing, config inheritance, ordering, and validation — is implemented and tested in the shared core, and the git engine behind sync already ships in GitFolder. The native macOS app is being built on top. Want to know when it lands?",
+    "notify": "Notify me",
+    "github": "Follow on GitHub"
+  },
+  "cta": {
+    "title": "GitKanban is on the way.",
+    "subtitle": "Be the first to know when it's available on the Mac App Store.",
+    "notify": "Notify me",
+    "github": "Star on GitHub"
+  }
+}
