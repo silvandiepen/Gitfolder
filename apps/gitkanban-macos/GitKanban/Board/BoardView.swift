@@ -50,15 +50,21 @@ private struct ColumnView: View {
     @Environment(AppModel.self) private var model
     let column: Column
     var width: CGFloat = 300
+    var laneColor: Color = .secondary
 
     private var isLane: Bool { !column.lane.folder.isEmpty }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
+            HStack(spacing: 7) {
+                Circle().fill(laneColor).frame(width: 9, height: 9)
                 Text(column.lane.name).font(.subheadline).fontWeight(.semibold)
                 Spacer()
-                Text("\(column.cards.count)").font(.caption).foregroundStyle(.secondary)
+                Text("\(column.cards.count)")
+                    .font(.caption).fontWeight(.medium)
+                    .foregroundStyle(laneColor)
+                    .padding(.horizontal, 6).padding(.vertical, 1)
+                    .background(laneColor.opacity(0.16), in: Capsule())
             }
             ForEach(column.cards) { card in
                 CardCell(card: card)
@@ -80,6 +86,7 @@ private struct ColumnView: View {
         .frame(width: width, alignment: .leading)
         .padding(12)
         .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(laneColor.opacity(0.30), lineWidth: 1))
     }
 }
 
@@ -90,16 +97,20 @@ private struct LanesCarousel: View {
     let columns: [Column]
     @State private var focusedID: String?
 
-    private let wide: CGFloat = 320
-    private let mid: CGFloat = 240
-    private let narrow: CGFloat = 148
+    private let base: CGFloat = 300
     private let spacing: CGFloat = 16
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .top, spacing: spacing) {
-                ForEach(columns) { column in
-                    ColumnView(column: column, width: width(for: column))
+                ForEach(Array(columns.enumerated()), id: \.element.id) { index, column in
+                    let scale = scale(for: column)
+                    let color = column.lane.folder.isEmpty ? Color.gray : LaneColor.at(index)
+                    ColumnView(column: column, width: base, laneColor: color)
+                        .scaleEffect(scale, anchor: .top)
+                        // Reclaim the horizontal gap the scale leaves, so non-focused
+                        // lanes sit narrower rather than shrinking in place.
+                        .padding(.horizontal, -base * (1 - scale) / 2)
                         .id(column.id)
                 }
             }
@@ -116,15 +127,13 @@ private struct LanesCarousel: View {
         }
     }
 
-    private func width(for column: Column) -> CGFloat {
+    /// 1.0 for the focused lane, shrinking with distance so out-of-focus lanes
+    /// are smaller (and, via negative padding, narrower).
+    private func scale(for column: Column) -> CGFloat {
         guard let focusedID,
               let focusedIndex = columns.firstIndex(where: { $0.id == focusedID }),
-              let index = columns.firstIndex(where: { $0.id == column.id }) else { return wide }
-        switch abs(index - focusedIndex) {
-        case 0, 1: return wide
-        case 2: return mid
-        default: return narrow
-        }
+              let index = columns.firstIndex(where: { $0.id == column.id }) else { return 1 }
+        return max(0.62, 1 - CGFloat(abs(index - focusedIndex)) * 0.13)
     }
 }
 
