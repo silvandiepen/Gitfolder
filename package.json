@@ -8,6 +8,7 @@
   },
   "workspaces": [
     "apps/*",
+    "apps/gitkanban-macos/webview",
     "packages/*"
   ],
   "scripts": {
@@ -21,6 +22,7 @@
     "core:build": "npm run build -w packages/core",
     "gitkanban:core:build": "npm run build -w packages/gitkanban-core",
     "gitkanban:core:test": "npm run test -w packages/gitkanban-core",
+    "gitkanban:webview:build": "npm run build -w @gitkit/gitkanban-markdown-webview",
     "macos:generate": "cd apps/gitfolder-macos && xcodegen generate",
     "macos:archive:app-store": "apps/gitfolder-macos/scripts/archive-app-store.sh"
   },

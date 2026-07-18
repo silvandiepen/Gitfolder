@@ -3,6 +3,15 @@ import Foundation
 import GitKit
 import Observation
 
+enum BoardEditError: LocalizedError {
+    case noFile
+    var errorDescription: String? {
+        switch self {
+        case .noFile: return "This card has no file on disk to save to."
+        }
+    }
+}
+
 /// Loads a board (a folder of markdown cards) and exposes it as columns for the UI.
 /// Read-only for now — editing/sync come with later tickets.
 @MainActor
@@ -12,6 +21,12 @@ final class BoardViewModel {
     var columns: [Column] = []
     var uncategorised: [Card] = []
     var errorMessage: String?
+
+    /// The opened board folder, if any (nil for the sample board). Cards are flat
+    /// `.md` files inside it, so a card's file is `folderURL/<fileName>`.
+    private(set) var folderURL: URL?
+    /// The card shown in the detail/preview sheet, if any.
+    var selectedCard: Card?
 
     /// The default five-lane board (matches the shared Tasks contract).
     static let defaultConfig: EffectiveConfig = resolveEffectiveConfig(
@@ -51,10 +66,38 @@ final class BoardViewModel {
         do {
             let config = detectConfig(in: folder)
             let cards = try BoardStore.loadCards(in: folder, fieldSource: config.fieldSource)
+            folderURL = folder
             apply(cards: cards, config: config, name: folder.lastPathComponent)
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    // MARK: - Card files (read / edit)
+
+    /// The on-disk file backing a card, or nil for sample cards with no folder.
+    func fileURL(for card: Card) -> URL? {
+        guard let folderURL, let fileName = card.fileName else { return nil }
+        return folderURL.appendingPathComponent(fileName)
+    }
+
+    /// A card is editable only when it maps to a real file we opened.
+    func canEdit(_ card: Card) -> Bool { fileURL(for: card) != nil }
+
+    /// The raw markdown file (frontmatter + body) as plain text, for the editor.
+    func rawText(for card: Card) -> String? {
+        guard let url = fileURL(for: card) else { return nil }
+        return try? String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// Write the edited text straight back to the card's file, then reload the
+    /// board. Plain text in, plain text out — git commit/sync is a later ticket.
+    func save(card: Card, text: String) throws {
+        guard let url = fileURL(for: card) else {
+            throw BoardEditError.noFile
+        }
+        try text.write(to: url, atomically: true, encoding: .utf8)
+        if let folderURL { load(folder: folderURL) }
     }
 
     private func apply(cards: [Card], config: EffectiveConfig, name: String) {

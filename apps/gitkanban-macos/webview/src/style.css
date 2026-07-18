@@ -1,0 +1,92 @@
+/* Nizel-style markdown rendering for GitKanban's card WebView.
+   System font, comfortable measure, and light/dark following the OS. */
+:root {
+  color-scheme: light dark;
+  --md-fg: #1c1e21;
+  --md-muted: #6b7280;
+  --md-bg: transparent;
+  --md-border: #e5e7eb;
+  --md-code-bg: #f4f5f7;
+  --md-accent: #2563eb;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --md-fg: #e6e7ea;
+    --md-muted: #9aa0aa;
+    --md-border: #33363d;
+    --md-code-bg: #22252b;
+    --md-accent: #6ea8ff;
+  }
+}
+
+html, body {
+  margin: 0;
+  background: var(--md-bg);
+}
+body {
+  font: 14px/1.6 -apple-system, "SF Pro Text", system-ui, sans-serif;
+  color: var(--md-fg);
+  -webkit-font-smoothing: antialiased;
+}
+.markdown {
+  padding: 20px 24px;
+  max-width: 720px;
+  overflow-wrap: anywhere;
+}
+.markdown:empty::after {
+  content: "Nothing to preview.";
+  color: var(--md-muted);
+  font-style: italic;
+}
+
+.markdown h1, .markdown h2, .markdown h3,
+.markdown h4, .markdown h5, .markdown h6 {
+  line-height: 1.25;
+  margin: 1.4em 0 0.5em;
+  font-weight: 600;
+}
+.markdown h1 { font-size: 1.6em; }
+.markdown h2 { font-size: 1.35em; padding-bottom: 0.25em; border-bottom: 1px solid var(--md-border); }
+.markdown h3 { font-size: 1.15em; }
+.markdown > :first-child { margin-top: 0; }
+
+.markdown p, .markdown ul, .markdown ol, .markdown blockquote, .markdown table {
+  margin: 0 0 1em;
+}
+.markdown a { color: var(--md-accent); text-decoration: none; }
+.markdown a:hover { text-decoration: underline; }
+
+.markdown ul, .markdown ol { padding-left: 1.5em; }
+.markdown li { margin: 0.2em 0; }
+.markdown li input[type="checkbox"] { margin-right: 0.5em; }
+
+.markdown blockquote {
+  margin-left: 0;
+  padding: 0.2em 1em;
+  color: var(--md-muted);
+  border-left: 3px solid var(--md-border);
+}
+
+.markdown code {
+  font-family: "SF Mono", ui-monospace, "Fira Code", monospace;
+  font-size: 0.88em;
+  background: var(--md-code-bg);
+  padding: 0.15em 0.4em;
+  border-radius: 5px;
+}
+.markdown pre {
+  background: var(--md-code-bg);
+  padding: 14px 16px;
+  border-radius: 10px;
+  overflow-x: auto;
+}
+.markdown pre code { background: none; padding: 0; }
+
+.markdown table { border-collapse: collapse; width: 100%; }
+.markdown th, .markdown td {
+  border: 1px solid var(--md-border);
+  padding: 6px 10px;
+  text-align: left;
+}
+.markdown img { max-width: 100%; }
+.markdown hr { border: none; border-top: 1px solid var(--md-border); margin: 1.5em 0; }

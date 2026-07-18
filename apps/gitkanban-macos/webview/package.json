@@ -1,0 +1,16 @@
+{
+  "name": "@gitkit/gitkanban-markdown-webview",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Bundles Nizel into a self-contained HTML asset that GitKanban loads in a WKWebView to render markdown cards.",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "nizel": "^0.1.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  }
+}

@@ -5,7 +5,8 @@ struct BoardView: View {
     @Environment(BoardViewModel.self) private var model
 
     var body: some View {
-        VStack(spacing: 0) {
+        @Bindable var model = model
+        return VStack(spacing: 0) {
             header
             Divider()
             ScrollView(.horizontal) {
@@ -24,6 +25,9 @@ struct BoardView: View {
             }
         }
         .frame(minWidth: 820, minHeight: 520)
+        .sheet(item: $model.selectedCard) { card in
+            CardDetailView(card: card).environment(model)
+        }
     }
 
     private var header: some View {
@@ -61,6 +65,7 @@ private struct ColumnView: View {
 }
 
 private struct CardCell: View {
+    @Environment(BoardViewModel.self) private var model
     let card: Card
 
     var body: some View {
@@ -83,6 +88,8 @@ private struct CardCell: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.background, in: RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(.quaternary, lineWidth: 1))
+        .contentShape(Rectangle())
+        .onTapGesture { model.selectedCard = card }
     }
 
     private var displayTitle: String {
