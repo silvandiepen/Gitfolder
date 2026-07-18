@@ -412,11 +412,12 @@ struct NewProjectSheet: View {
         // added lanes derive a folder from their name and get created on disk.
         var newLanes: [Lane] = []
         var createFolders: [String] = []
-        // Seed the "already taken" sets from the lanes we're keeping, so an added lane
-        // can't collide in id/status or (case-insensitively) folder with an existing one.
-        let kept = laneItems.compactMap { laneOrigins[$0.id] }
-        var usedIDs = Set(kept.map(\.id))
-        var usedFolders = Set(kept.map { $0.folder.lowercased() })
+        // Seed the "already taken" sets from ALL original lanes — kept AND removed. A
+        // removed lane's folder can still exist on disk until its migration runs (which
+        // ends by deleting that folder), so an added lane must not reuse the name or the
+        // migration would delete the freshly-created folder. Also guards id/status.
+        var usedIDs = Set(originalLanes.map(\.id))
+        var usedFolders = Set(originalLanes.map { $0.folder.lowercased() })
         for item in laneItems {
             let laneName = item.text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !laneName.isEmpty else { continue }
