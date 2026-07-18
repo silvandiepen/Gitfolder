@@ -5,6 +5,9 @@ import SwiftUI
 /// uncategorised cards. Tapping a card opens its detail sheet.
 struct BoardView: View {
     @Environment(AppModel.self) private var model
+    @Binding var showNewProject: Bool
+
+    private var hasProjects: Bool { !(model.workspace?.projects.isEmpty ?? true) }
 
     var body: some View {
         @Bindable var model = model
@@ -24,6 +27,8 @@ struct BoardView: View {
                     }
                     .padding(16)
                 }
+            } else if !hasProjects {
+                ProjectsEmptyState(onCreate: { showNewProject = true })
             } else {
                 ContentUnavailableView(
                     "No project selected",

@@ -5,11 +5,13 @@ import SwiftUI
 struct WorkspaceView: View {
     @Environment(AppModel.self) private var model
 
+    private var projects: [BoardProject] { model.workspace?.projects ?? [] }
+
     private var selection: Binding<String?> {
         Binding(
             get: { model.selectedProject?.id },
             set: { newID in
-                if let project = model.workspace?.projects.first(where: { $0.id == newID }) {
+                if let project = projects.first(where: { $0.id == newID }) {
                     model.selectProject(project)
                 }
             }
@@ -17,35 +19,84 @@ struct WorkspaceView: View {
     }
 
     var body: some View {
+        @Bindable var model = model
         NavigationSplitView {
-            List(model.workspace?.projects ?? [], selection: selection) { project in
-                Label(project.name, systemImage: "folder")
-                    .tag(project.id)
+            Group {
+                if projects.isEmpty {
+                    VStack {
+                        NewProjectButton { model.isShowingNewProjectSheet = true }
+                            .padding(16)
+                        Spacer()
+                    }
+                } else {
+                    VStack(spacing: 0) {
+                        NewProjectButton { model.isShowingNewProjectSheet = true }
+                            .padding([.horizontal, .top], 12)
+                        List(projects, selection: selection) { project in
+                            Label(project.name, systemImage: "folder")
+                                .tag(project.id)
+                        }
+                    }
+                }
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 220)
         } detail: {
-            BoardView()
+            BoardView(showNewProject: $model.isShowingNewProjectSheet)
         }
         .toolbar {
             ToolbarItem(placement: .navigation) {
                 if let repo = model.activeRepo {
-                    Text(repo.fullName).font(.headline)
+                    Menu {
+                        Button("Switch Repository…") { model.closeRepo() }
+                        Button("Sign Out") { model.signOut() }
+                    } label: {
+                        Text(repo.fullName)
+                    }
                 }
             }
+
             ToolbarItemGroup(placement: .primaryAction) {
-                Text(model.syncStatus)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Button {
-                    Task { await model.refresh() }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
+                if model.errorMessage != nil {
+                    Button {
+                        model.errorMessage = nil
+                    } label: {
+                        Label("Error", systemImage: "exclamationmark.triangle")
+                    }
+                    .labelStyle(.iconOnly)
+                    .tint(.red)
+                    .help(model.errorMessage ?? "")
                 }
-                .help("Pull and reload")
-                Button("Repos") { model.closeRepo() }
-                    .help("Choose another repository")
-                Button("Sign out") { model.signOut() }
+
+                Button {
+                    model.isShowingNewProjectSheet = true
+                } label: {
+                    Label("New Project", systemImage: "plus")
+                }
+                .labelStyle(.iconOnly)
+                .help("New project")
+
+                if isSyncing {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Button {
+                        Task { await model.refresh() }
+                    } label: {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                    }
+                    .labelStyle(.iconOnly)
+                    .help("Refresh")
+                }
             }
         }
+        .sheet(isPresented: $model.isShowingNewProjectSheet) {
+            NewProjectSheet(isPresented: $model.isShowingNewProjectSheet)
+                .environment(model)
+        }
+    }
+
+    private var isSyncing: Bool {
+        model.isCreatingProject
+            || ["Pulling…", "Cloning…", "Committing…", "Pushing…", "Creating project…"].contains(model.syncStatus)
     }
 }
