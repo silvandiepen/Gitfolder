@@ -105,50 +105,41 @@ private struct ColumnView: View {
 /// spring-animates when the focused lane changes while scrolling.
 private struct LanesCarousel: View {
     let columns: [Column]
-    @State private var focusedID: String?
 
     private let base: CGFloat = 300
     private let spacing: CGFloat = 16
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(alignment: .top, spacing: spacing) {
-                ForEach(Array(columns.enumerated()), id: \.element.id) { index, column in
-                    let scale = scale(for: column)
-                    let color = column.lane.folder.isEmpty ? Color.gray : LaneColor.at(index)
-                    ColumnView(column: column, width: base, laneColor: color)
-                        .scaleEffect(scale, anchor: .top)
-                        // Reclaim the horizontal gap the scale leaves, so non-focused
-                        // lanes sit narrower rather than shrinking in place.
-                        .padding(.horizontal, -base * (1 - scale) / 2)
-                        .id(column.id)
+        GeometryReader { outer in
+            let viewport = outer.size.width
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: spacing) {
+                    ForEach(Array(columns.enumerated()), id: \.element.id) { index, column in
+                        let color = column.lane.folder.isEmpty ? Color.gray : LaneColor.at(index)
+                        ColumnView(column: column, width: base, laneColor: color)
+                            .visualEffect { content, proxy in
+                                content.scaleEffect(
+                                    laneScale(frame: proxy.frame(in: .scrollView(axis: .horizontal)),
+                                              viewport: viewport),
+                                    anchor: .top
+                                )
+                            }
+                    }
                 }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
             }
-            .scrollTargetLayout()
-            .padding(.horizontal, 28)
-            .padding(.vertical, 16)
-            .animation(.spring(response: 0.38, dampingFraction: 0.86), value: focusedID)
-        }
-        .scrollPosition(id: $focusedID, anchor: .center)
-        .scrollTargetBehavior(.viewAligned)
-        .onAppear { if focusedID == nil { focusedID = columns.first?.id } }
-        .onChange(of: columns.map(\.id)) { _, ids in
-            if focusedID == nil || !ids.contains(focusedID!) { focusedID = ids.first }
         }
     }
+}
 
-    /// The focused lane and its two neighbours stay full size (≈3 in focus); the
-    /// rest shrink, and further-out lanes shrink more.
-    private func scale(for column: Column) -> CGFloat {
-        guard let focusedID,
-              let focusedIndex = columns.firstIndex(where: { $0.id == focusedID }),
-              let index = columns.firstIndex(where: { $0.id == column.id }) else { return 1 }
-        switch abs(index - focusedIndex) {
-        case 0, 1: return 1.0
-        case 2: return 0.66
-        default: return 0.46
-        }
-    }
+/// 1.0 when a lane is fully inside the scroll viewport; shrinks toward 0.5 as it
+/// scrolls off either edge. So the lanes that fit (which depends on the window
+/// width) stay in focus, and the first/last are in focus at the scroll ends.
+private func laneScale(frame: CGRect, viewport: CGFloat) -> CGFloat {
+    let overflow = max(max(0, -frame.minX), max(0, frame.maxX - viewport))
+    let width = frame.width > 0 ? frame.width : 1
+    return 1 - min(1, overflow / width) * 0.5
 }
 
 private struct CardCell: View {
