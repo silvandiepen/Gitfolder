@@ -1,7 +1,7 @@
 # GitKanban (macOS) — Architecture
 
-How GitKanban is built and planned. The theme throughout: **the board contract is owned in
-TypeScript, the git engine is shared Swift, and the app is a thin, replaceable UI on top.** This
+How GitKanban is built. The theme throughout: **the board contract is owned in TypeScript, the git
+engine and board parsing are shared Swift, and the app is a thin UI + state layer on top.** This
 document is explicit about what **Exists** on disk today versus what is **Planned** / tracked on
 the GitKit board.
 
@@ -11,18 +11,19 @@ the GitKit board.
 
 | Layer | Where | Status |
 |---|---|---|
-| Board contract (card + config format) | `project-assets/Tasks/README.md` | **Exists** (canonical, live board) |
+| Board contract (card + config format) | `/Users/silvandiepen/Projects/Tasks/README.md` | **Exists** (canonical, live board) |
 | Board logic (schema, inheritance, rank, validation) | `packages/gitkanban-core` (TS) | **Exists** — built + tested |
-| Shared git engine + services | `swift/GitKit` | **Partial** — `GitEngine` protocol, `ShellGitEngine`, `KeychainService`, `GitHubOAuthService` exist; `MarkdownStore`, `ConfigStore`, `FolderAccessService` pending |
-| Swift board model (`BoardStore`/`BoardMarkdown`, config) mirroring core | `swift/GitKit` | **Exists** — GITKIT-009, in the shared package, tested |
-| App shell + board UI | `apps/gitkanban-macos/GitKanban/` | **Exists (full read/write)** — `GitKanbanApp` + `AppModel` drive connect, multi-repo checkouts, board render, card create/edit/move/delete, project create/settings, and commit/push sync |
+| Shared git engine + services | `swift/GitKit` | **Exists** — `GitEngine`, `ShellGitEngine`, `GitProcessRunner`, `KeychainService`, `GitHubOAuthService`, `GitHubReposService` |
+| Swift board model + parsing | `swift/GitKit` | **Exists** — `BoardStore`, `BoardMarkdown`, `BoardModel`, `BoardInheritance`, `RemoteBoardStore`, `CardText` |
+| App shell + board UI (read/write) | `apps/gitkanban-macos/GitKanban/` | **Exists** — connect, own-checkout clone, render, create/edit/move/reorder/delete, filter/search, per-card history, commit+push |
+| Background interval sync + conflict UI | `apps/gitkanban-macos/GitKanban/` | **Planned** — writes commit+push immediately; last-writer-wins |
+| Fractional rank keys in the app | `apps/gitkanban-macos/GitKanban/` | **Planned** — the app uses an integer `order` today (core has `rank.ts`) |
+| Swift test target | `apps/gitkanban-macos/project.yml` | **Planned** — no `GitKanbanTests` target yet |
 
-> The GitKit task board tracked the Swift board model (GITKIT-009) and the board UI render
-> (GITKIT-010) as deliverables; both are merged. The app is now a full client: it clones one or
-> more repos into app-owned checkouts, renders the board, and writes cards/projects back as
-> markdown that it commits and pushes. The read→edit→commit→push orchestration lives **inline in
-> `AppModel`** rather than in the separately-planned `MarkdownStore` / `BoardSyncEngine` modules
-> (see below) — extracting those remains a refactor, not a missing feature. Do not assume Swift
+> GITKIT-009 (Swift board model) and GITKIT-010 (board render) shipped in `swift/GitKit` and the
+> app. GITKIT-011 (editing/move), GITKIT-012 (commit+push), and GITKIT-013 (history) also shipped,
+> alongside a large amount of unplanned surface (GitHub connect + own-the-checkout, project/task
+> CRUD, editable settings, markdown webview, filters/search/list/multi-select). Do not assume Swift
 > APIs beyond what `swift/GitKit/Sources/GitKit/` and `apps/gitkanban-macos/GitKanban/` contain.
 
 ---
@@ -46,91 +47,94 @@ The platform-agnostic source of truth. Modules:
 | `bodyfields.ts` | `resolveBodySectionFields` — read fields from a markdown body section (legacy boards) |
 | `validation.ts` | `validateCard(config, card)` against the effective config |
 
-The **Swift side mirrors this package** and is tested against its shared fixtures so the two
-parsers cannot drift.
+The **Swift side mirrors this package** and is tested (in GitKit) against shared fixtures so the
+two parsers cannot drift.
 
-### 2. `swift/GitKit` — the shared Swift engine (Partial)
+### 2. `swift/GitKit` — the shared Swift engine (Exists)
 
-The one package both native apps depend on. `apps/gitkanban-macos/project.yml` already declares the
+The one package both native apps depend on. `apps/gitkanban-macos/project.yml` declares the
 dependency (`packages: GitKit: path: ../../swift/GitKit`). Present in
 `swift/GitKit/Sources/GitKit/`:
 
 - `GitEngine` (protocol) — `clone`, `pullRebase`, `commit`, `push`, `status`,
   `fileHistory(at:file:limit:)`. **The only thing that knows git.**
 - `ShellGitEngine` — macOS implementation shelling out to `git` (ported from GitFolder's
-  `GitRunner`), with `GitProcessRunner`.
+  `GitRunner`), via `GitProcessRunner`.
 - `GitTypes` (`GitAuth`, `PullResult`, `RepoStatus`, `CommitInfo`), `GitEngineError`.
-- `KeychainService`, `GitHubOAuthService` (device-flow OAuth).
+- `BoardStore` / `BoardMarkdown` / `BoardModel` / `BoardInheritance` — the Swift board mirror:
+  read a checkout folder → workspace/projects/lanes/cards, parse frontmatter (Yams) and
+  body-section fields, resolve effective config, group into columns.
+- `RemoteBoardStore` + `BoardFileSource` — a transport-agnostic board loader (used by iOS over an
+  API; macOS uses the filesystem via `BoardStore`).
+- `CardText` — card body/frontmatter helpers.
+- `KeychainService`, `GitHubOAuthService` (device-flow OAuth), `GitHubReposService` (list repos).
 
-Pending extraction from GitFolder (tracked GITKIT-005): `FolderAccessService`, `ConfigStore`, and
-`MarkdownStore` (files ⇄ cards, mirroring `gitkanban-core`). `Libgit2Engine` (iOS) is Phase 2.
+There is **no** `MarkdownStore`, `BoardSyncEngine`, `ConfigStore`, or `FolderAccessService` type —
+earlier plans named these, but the app owns its own checkout (so it needs no security-scoped
+bookmarks), reads via `BoardStore`, writes card files directly, and drives sync inline in
+`AppModel`. `Libgit2Engine` is not present; iOS ships over an API transport instead (see the iOS
+app).
 
 ---
 
-## Planned app structure
-
-From the app README — the SwiftUI target sources land under `GitKanban/` (see `project.yml`,
-`sources: GitKanban`):
+## App structure
 
 ```txt
 GitKanban/
-  App/       GitKanbanApp (entry), AppModel (single UI-facing @Observable state)
-  Models/    Card, Board, Column, config — mirror @gitkit/gitkanban-core
-  Services/  MarkdownStore, BoardSyncEngine — built on GitKit's GitEngine
-  Board/     columns, drag/drop, card editor, history view
-  Views/
+  App/       GitKanbanApp (entry, ⌘-commands, task-detail WindowGroup), AppModel (@Observable
+             state), RootView (restore → connect → repo picker → workspace)
+  Board/     BoardView (lane carousel, backlog dock, list view, selection bar), WorkspaceView
+             (projects sidebar), CardDetailView, TaskDetailWindow, FilterBar, SearchSheet,
+             TaskHistorySheet, MarkdownWebView, BoardColors
+  Connect/   ConnectView (device-flow), RepoPickerView
+  Project/   NewProjectSheet (create + editable settings), NewTaskSheet, ProjectsEmptyState
+  Resources/ markdown-renderer.html
 ```
 
-Convention (root AGENTS.md): `AppModel` is the single UI-facing state object; domain/services stay
-UI-agnostic so the same layer can later back iOS unchanged.
+Convention (root AGENTS.md): `AppModel` is the single UI-facing state object; GitKit stays
+UI-agnostic so the board parsing layer can back iOS unchanged.
 
 ---
 
 ## Module boundaries and data flow
 
-The UI mutates **domain objects only**. `MarkdownStore` is the only thing that knows the file
-format; `GitEngine` is the only thing that knows git. That double boundary is what lets one board
-UI run on macOS shell-git and (later) iOS libgit2 unchanged.
-
 ```txt
         ┌──────────────────────────────────────────────┐
-        │  SwiftUI board UI  (columns · card editor ·   │   Exists — columns, drag/drop,
-        │  drag/drop · history view)                    │   card-detail window + editor,
-        └───────────────┬──────────────────────────────┘   history sheet all shipped
-                        │ reads/writes domain objects only
+        │  SwiftUI board UI  (lane carousel · card      │   Exists — render, edit,
+        │  detail window · drag/reorder · filters ·     │   move, reorder, delete,
+        │  search · history sheet · markdown webview)   │   filter, search, history
+        └───────────────┬──────────────────────────────┘
+                        │ mutates AppModel state / calls AppModel actions
                         ▼
         ┌──────────────────────────────────────────────┐
-        │  Domain: Board · Column · Card · Config       │   Exists (Swift mirror in
-        │  (mirrors @gitkit/gitkanban-core)             │   swift/GitKit / GITKIT-009)
+        │  AppModel (@Observable)                       │   Exists — connect, own-checkout,
+        │  session, workspace, selection, filters;      │   read via BoardStore, compose
+        │  create/edit/move/reorder/delete → write file │   frontmatter, commit + push
+        │  → commit + push                              │
         └───────┬───────────────────────────┬──────────┘
-                │                            │
+                │ read                        │ write + git
                 ▼                            ▼
    ┌─────────────────────────┐   ┌──────────────────────────────┐
-   │ MarkdownStore           │   │ BoardSyncEngine              │   Shipped inline in
-   │ files ⇄ cards, using    │   │ orchestrates commit-per-     │   AppModel (not yet
-   │ core schema rules       │   │ action, pull --rebase / push │   extracted into these
-   │ (Yams frontmatter)      │   │ + status states              │   standalone modules)
-               │                                  │ calls only the protocol
-               │                                  ▼
-               │                    ┌──────────────────────────────┐
-               │                    │ GitEngine (protocol)         │   Exists
-               │                    │  ├─ ShellGitEngine (macOS)    │   Exists
-               │                    │  └─ Libgit2Engine (iOS)       │   Planned (Phase 2)
-               │                    └───────────────┬──────────────┘
-               ▼                                    ▼
+   │ GitKit BoardStore /     │   │ GitKit ShellGitEngine        │   Exists
+   │ BoardMarkdown / Model / │   │ clone · pullRebase · commit  │
+   │ Inheritance (Yams read) │   │ · push · status · fileHistory│
+   └───────────┬─────────────┘   └───────────────┬──────────────┘
+               ▼                                  ▼
         ┌──────────────────────────────────────────────────────────┐
-        │  Repo of markdown files (the board) — local git clone     │
-        │  card files + README-frontmatter config; git is the store │
+        │  App-owned checkout in Application Support (a git clone)   │
+        │  <project>/<lane folder>/<card>.md + README config; git    │
+        │  is the store. Lanes are folders; status must match folder │
         └──────────────────────────────────────────────────────────┘
 ```
 
-Read path: repo files → `MarkdownStore` parses each card (`parseCard`) and the config →
-`resolveEffectiveConfig` → `groupIntoColumns` → domain `Board`/`Column`/`Card` → board UI.
+**Read path:** checkout files → `BoardStore` parses cards + config (Yams) → `resolveEffectiveConfig`
+→ `groupIntoColumns` → workspace/projects/columns/cards → board UI.
 
-Write path: a UI action mutates a domain card → `MarkdownStore` serializes just that card
-(`serializeCard`, minimal diff) → `BoardSyncEngine` commits one logical action → `pull --rebase`
-then `push` via `GitEngine`. A column move = editing `status`; a reorder = minting one `order`
-rank key — each a single-line diff in a single file (see [Decisions.md](./Decisions.md) §3, §6).
+**Write path:** a UI action mutates a card → `AppModel` composes the card file (frontmatter edited
+in place, unknown keys preserved; a lane change **moves the file** into the destination lane folder
+and sets `status`) → `ShellGitEngine.commit` one logical action → `pull --rebase` then `push`.
+Reorder currently writes an integer `order = index + 1` for the affected lane rather than minting a
+single fractional key — see [Decisions.md](./Decisions.md) §6.
 
 ---
 
@@ -140,17 +144,20 @@ rank key — each a single-line diff in a single file (see [Decisions.md](./Deci
   `.xcodeproj`. Regenerate with `cd apps/gitkanban-macos && xcodegen generate`.
 - **Target:** `GitKanban`, macOS 14.0+, bundle id `app.hakobs.gitkanban`, sandboxed
   (`app-sandbox`, `network.client`, `files.user-selected.read-write`, `bookmarks.app-scope`),
-  hardened runtime, category `developer-tools`. A `GitKanbanTests` unit-test bundle is defined.
+  hardened runtime, category `developer-tools`. **No test target is defined yet** (tracked on the
+  board).
 - **Dependency:** the `GitKit` Swift package (`../../swift/GitKit`).
+- **Markdown webview:** `webview/` bundles `renderer.ts` (Nizel) with esbuild; rebuild with
+  `npm run gitkanban:webview:build`.
 - **Core tests:** `npm run gitkanban:core:test` runs the TypeScript board-logic suite (Vitest).
-- **CI:** the TS contract tests run today; Swift CI (`swift-gitkit.yml`, and a gitkanban-macos
-  build) is added as the app target materializes.
+- **Run:** `npm run gitkanban:run` builds and launches the app (`scripts/run.sh`).
 
 ---
 
 ## Platform trajectory
 
-macOS (Phase 1) shells out to `git`. iOS (Phase 2) cannot — no shell, no `git` binary — so it uses
-an embedded `Libgit2Engine` (HTTPS + OAuth token), with the GitHub HTTP API as a possible
-fast-start fallback. The `GitEngine` protocol is what makes that swap invisible to the board UI.
-Details in `project-assets/GitKit/GitKanban/plan/platforms-and-git.md`.
+macOS shells out to `git` via `ShellGitEngine`. iOS cannot — no shell, no `git` binary — so the
+iOS app talks to a hosted git provider's REST API through **git-pont** (no local clone), reusing
+GitKit's `RemoteBoardStore`/`BoardFileSource` for parsing. That superseded the earlier
+"`Libgit2Engine` first" plan. Details in
+`/Users/silvandiepen/Projects/GitKit/GitKanban/plan/platforms-and-git.md`.

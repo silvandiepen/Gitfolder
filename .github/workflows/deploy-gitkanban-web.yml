@@ -1,0 +1,39 @@
+name: Deploy GitKanban Web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - apps/gitkanban-web/**
+      - packages/gitkanban-core/**
+      - package.json
+      - package-lock.json
+      - tsconfig.base.json
+      - .github/workflows/deploy-gitkanban-web.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gitkanban-web-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck -w apps/gitkanban-web
+      - run: npm test -w apps/gitkanban-web
+      - run: npm run build -w apps/gitkanban-web
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy apps/gitkanban-web/dist --project-name=gitkanban-web
