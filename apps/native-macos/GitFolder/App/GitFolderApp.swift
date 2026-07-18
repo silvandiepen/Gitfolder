@@ -23,4 +23,15 @@ struct GitFolderApp: App {
         }
         .windowResizability(.contentSize)
     }
+
+    init() {
+        let model = AppModel()
+        _appModel = State(initialValue: model)
+        Task { @MainActor in
+            model.loadIfNeeded()
+            DispatchQueue.main.async {
+                model.requestLaunchAtLoginIfNeeded()
+            }
+        }
+    }
 }

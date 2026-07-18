@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import GitKit
 import Observation
@@ -17,8 +18,11 @@ final class AppModel {
     @ObservationIgnored private let syncEngine: GitSyncEngine
     @ObservationIgnored private let keychainService: KeychainService
     @ObservationIgnored private let gitHubOAuthService: GitHubOAuthService
+    @ObservationIgnored private let loginItemService: LoginItemManaging
+    @ObservationIgnored private let userDefaults: UserDefaults
     @ObservationIgnored private var scheduler: Timer?
     @ObservationIgnored private var didLoad = false
+    @ObservationIgnored private let launchAtLoginPromptKey = "hasAskedLaunchAtLogin"
 
     init(
         configStore: ConfigStore = ConfigStore(),
@@ -29,12 +33,16 @@ final class AppModel {
         gitHubOAuthService: GitHubOAuthService = GitHubOAuthService(
             clientID: "Ov23li24tWFt7qLuLqCe",
             userAgent: "GitFolder"
-        )
+        ),
+        loginItemService: LoginItemManaging = LoginItemService(),
+        userDefaults: UserDefaults = .standard
     ) {
         self.configStore = configStore
         self.syncEngine = syncEngine
         self.keychainService = keychainService
         self.gitHubOAuthService = gitHubOAuthService
+        self.loginItemService = loginItemService
+        self.userDefaults = userDefaults
     }
 
     func invalidateScheduler() {
@@ -51,12 +59,14 @@ final class AppModel {
     func load() {
         do {
             config = try configStore.load()
+            syncLaunchAtLoginStateFromSystem()
             hasGitHubToken = (try? keychainService.load())?.nilIfEmpty != nil
             lastMessage = "Ready"
             startScheduler()
             refreshGitHubLogin()
         } catch {
             config = .empty
+            syncLaunchAtLoginStateFromSystem()
             hasGitHubToken = (try? keychainService.load())?.nilIfEmpty != nil
             lastMessage = "Config reset: \(error.localizedDescription)"
             startScheduler()
@@ -219,6 +229,42 @@ final class AppModel {
         save(message: config.app.pauseAllSyncing ? "Syncing paused" : "Syncing resumed")
     }
 
+    func setLaunchAtLogin(_ enabled: Bool) {
+        do {
+            try loginItemService.setEnabled(enabled)
+            config.app.launchAtLogin = loginItemService.isEnabled
+            userDefaults.set(true, forKey: launchAtLoginPromptKey)
+            save(message: config.app.launchAtLogin ? "GitFolder will open at login" : "GitFolder will not open at login")
+        } catch {
+            config.app.launchAtLogin = loginItemService.isEnabled
+            lastMessage = "Could not update login item: \(error.localizedDescription)"
+        }
+    }
+
+    func requestLaunchAtLoginIfNeeded() {
+        guard !userDefaults.bool(forKey: launchAtLoginPromptKey), !loginItemService.isEnabled else {
+            return
+        }
+
+        let alert = NSAlert()
+        alert.messageText = "Open GitFolder when you log in?"
+        alert.informativeText = "GitFolder can start automatically with macOS so folder syncing begins without opening it manually."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Open at Login")
+        alert.addButton(withTitle: "Not Now")
+
+        NSApp.activate(ignoringOtherApps: true)
+        let response = alert.runModal()
+        userDefaults.set(true, forKey: launchAtLoginPromptKey)
+
+        if response == .alertFirstButtonReturn {
+            setLaunchAtLogin(true)
+        } else {
+            config.app.launchAtLogin = false
+            save(message: "Launch at login skipped")
+        }
+    }
+
     func chooseSSHPrivateKey() {
         let service = FolderAccessService()
         guard let url = service.pickPrivateKey() else { return }
@@ -357,6 +403,14 @@ final class AppModel {
             Task { @MainActor in
                 self?.syncDueFolders()
             }
+        }
+    }
+
+    private func syncLaunchAtLoginStateFromSystem() {
+        let isEnabled = loginItemService.isEnabled
+        if config.app.launchAtLogin != isEnabled {
+            config.app.launchAtLogin = isEnabled
+            try? configStore.save(config)
         }
     }
 

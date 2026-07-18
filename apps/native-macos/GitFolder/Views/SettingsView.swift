@@ -161,6 +161,21 @@ struct SettingsView: View {
 
                 SettingsDivider()
 
+                SettingsFieldRow(systemImage: "power", title: "Open at login") {
+                    Toggle(
+                        "Open at login",
+                        isOn: Binding(
+                            get: { appModel.config.app.launchAtLogin },
+                            set: { newValue in
+                                appModel.setLaunchAtLogin(newValue)
+                            }
+                        )
+                    )
+                    .labelsHidden()
+                }
+
+                SettingsDivider()
+
                 SettingsFieldRow(systemImage: "clock", title: "Default interval") {
                     Picker(
                         "Default interval",
