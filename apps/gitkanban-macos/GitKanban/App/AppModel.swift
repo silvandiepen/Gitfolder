@@ -146,11 +146,13 @@ final class AppModel {
             let dir = try checkoutDirectory(for: repo)
             let gitDir = dir.appendingPathComponent(".git")
             if FileManager.default.fileExists(atPath: gitDir.path) {
-                // Only pull when the repo actually has commits — pulling an
-                // unborn branch fails.
                 if hasCommits(at: dir) {
                     syncStatus = "Pulling…"
                     _ = try await git.pullRebase(at: dir, auth: auth)
+                } else {
+                    // Local branch is unborn; adopt the remote's commits if it has any.
+                    syncStatus = "Syncing…"
+                    syncUnbornFromRemote(at: dir, branch: repo.defaultBranch)
                 }
             } else {
                 syncStatus = "Cloning…"
@@ -536,6 +538,19 @@ final class AppModel {
             name: name, fullName: "\(owner)/\(name)", ownerLogin: owner,
             cloneURL: url, defaultBranch: "main", isPrivate: false
         )
+    }
+
+    /// Fetch the remote and, if it has commits on `branch`, adopt them into the
+    /// (unborn) local branch. Used when a repo was cloned empty and later got content.
+    private func syncUnbornFromRemote(at dir: URL, branch: String) {
+        let basic = Data("\(login ?? "x-access-token"):\(token ?? "")".utf8).base64EncodedString()
+        let header = "http.extraheader=AUTHORIZATION: basic \(basic)"
+        _ = try? runner.run(["-c", header, "fetch", "origin"], in: dir)
+        if let result = try? runner.run(["rev-parse", "--verify", "--quiet", "origin/\(branch)"], in: dir),
+           result.exitCode == 0 {
+            _ = try? runner.run(["reset", "--hard", "origin/\(branch)"], in: dir)
+            _ = try? runner.run(["branch", "--set-upstream-to=origin/\(branch)", branch], in: dir)
+        }
     }
 
     /// Whether the checkout has at least one commit (an unborn branch can't be pulled).

@@ -83,52 +83,49 @@ private struct ColumnView: View {
     }
 }
 
-/// Horizontal lane carousel: fixed slots keep positions stable while each lane's
-/// card width grows toward the viewport centre and shrinks toward the edges —
-/// width animates, height stays constant.
+/// Horizontal lane carousel: the board snaps a lane toward the centre; the focused
+/// lane and its immediate neighbours are wide, the rest narrow. Width (not height)
+/// spring-animates when the focused lane changes while scrolling.
 private struct LanesCarousel: View {
     let columns: [Column]
-    @State private var offset: CGFloat = 0
+    @State private var focusedID: String?
 
-    private let slot: CGFloat = 320
-    private let spacing: CGFloat = 14
-    private let minWidth: CGFloat = 150
-    private let maxWidth: CGFloat = 300
+    private let wide: CGFloat = 320
+    private let mid: CGFloat = 240
+    private let narrow: CGFloat = 148
+    private let spacing: CGFloat = 16
 
     var body: some View {
-        GeometryReader { outer in
-            let vp = outer.size.width
-            let inset = max(16, vp / 2 - slot / 2)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: spacing) {
-                    ForEach(Array(columns.enumerated()), id: \.element.id) { index, column in
-                        let center = inset + CGFloat(index) * (slot + spacing) + slot / 2 + offset
-                        let focus = focusValue(distance: abs(center - vp / 2))
-                        ColumnView(column: column, width: minWidth + (maxWidth - minWidth) * focus)
-                            .frame(width: slot)
-                            .opacity(0.55 + 0.45 * focus)
-                    }
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(alignment: .top, spacing: spacing) {
+                ForEach(columns) { column in
+                    ColumnView(column: column, width: width(for: column))
+                        .id(column.id)
                 }
-                .padding(.horizontal, inset)
-                .padding(.vertical, 16)
-                .background(GeometryReader { g in
-                    Color.clear.preference(key: LaneOffsetKey.self, value: g.frame(in: .named("lanes")).minX)
-                })
             }
-            .coordinateSpace(name: "lanes")
-            .onPreferenceChange(LaneOffsetKey.self) { offset = $0 }
+            .scrollTargetLayout()
+            .padding(.horizontal, 28)
+            .padding(.vertical, 16)
+            .animation(.spring(response: 0.38, dampingFraction: 0.86), value: focusedID)
+        }
+        .scrollPosition(id: $focusedID, anchor: .center)
+        .scrollTargetBehavior(.viewAligned)
+        .onAppear { if focusedID == nil { focusedID = columns.first?.id } }
+        .onChange(of: columns.map(\.id)) { _, ids in
+            if focusedID == nil || !ids.contains(focusedID!) { focusedID = ids.first }
         }
     }
 
-    private func focusValue(distance: CGFloat) -> CGFloat {
-        let radius = (slot + spacing) * 1.3
-        return min(1, max(0, 1.25 - distance / radius))
+    private func width(for column: Column) -> CGFloat {
+        guard let focusedID,
+              let focusedIndex = columns.firstIndex(where: { $0.id == focusedID }),
+              let index = columns.firstIndex(where: { $0.id == column.id }) else { return wide }
+        switch abs(index - focusedIndex) {
+        case 0, 1: return wide
+        case 2: return mid
+        default: return narrow
+        }
     }
-}
-
-private struct LaneOffsetKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
 private struct CardCell: View {
