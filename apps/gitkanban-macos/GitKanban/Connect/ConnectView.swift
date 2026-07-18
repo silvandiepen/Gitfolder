@@ -4,6 +4,7 @@ import SwiftUI
 /// The first screen: connect a GitHub account via the device flow.
 struct ConnectView: View {
     @Environment(AppModel.self) private var model
+    @State private var copied = false
 
     var body: some View {
         VStack(spacing: 20) {
@@ -50,12 +51,26 @@ struct ConnectView: View {
             Text("Enter this code on GitHub")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            Text(auth.userCode)
-                .font(.system(.largeTitle, design: .monospaced))
-                .fontWeight(.bold)
-                .textSelection(.enabled)
+            Button {
+                copyCode(auth.userCode)
+            } label: {
+                HStack(spacing: 10) {
+                    Text(auth.userCode)
+                        .font(.system(.largeTitle, design: .monospaced))
+                        .fontWeight(.bold)
+                    Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                        .font(.title3)
+                        .foregroundStyle(copied ? .green : .secondary)
+                }
                 .padding(.horizontal, 20).padding(.vertical, 10)
                 .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
+                .contentShape(RoundedRectangle(cornerRadius: 10))
+            }
+            .buttonStyle(.plain)
+            .help("Click to copy")
+            Text(copied ? "Copied!" : "Click the code to copy")
+                .font(.caption)
+                .foregroundStyle(copied ? .green : .secondary)
 
             Link(auth.verificationURI.absoluteString, destination: auth.verificationURI)
                 .font(.callout)
@@ -71,6 +86,17 @@ struct ConnectView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+        }
+    }
+
+    private func copyCode(_ code: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(code, forType: .string)
+        copied = true
+        Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            copied = false
         }
     }
 }
