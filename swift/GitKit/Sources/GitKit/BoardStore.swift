@@ -49,7 +49,8 @@ public enum BoardStore {
         description: String,
         lanes: [Lane],
         priorities: [Priority],
-        users: [User]
+        users: [User],
+        types: [String] = []
     ) -> String {
         var lines: [String] = [
             "---",
@@ -91,6 +92,10 @@ public enum BoardStore {
                 if let github = user.github { lines.append("    github: \(yamlScalar(github))") }
                 if let role = user.role { lines.append("    role: \(yamlScalar(role))") }
             }
+        }
+
+        if !types.isEmpty {
+            lines.append("types: [\(types.map { yamlScalar($0) }.joined(separator: ", "))]")
         }
 
         lines.append("---")

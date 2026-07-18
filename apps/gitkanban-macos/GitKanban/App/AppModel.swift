@@ -751,6 +751,81 @@ final class AppModel {
         return "---\n\(fm)\n---\n\n\(trimmedBody)\n"
     }
 
+    /// Count tasks assigned to a given user in the current board (for the
+    /// "removing this member affects N tasks" prompt).
+    func taskCount(assignedTo userID: String) -> Int {
+        allCards.filter { $0.fields.assignee == userID }.count
+    }
+
+    /// Save edited project settings: rewrite the project's `README.md` config,
+    /// unassign tasks of removed members, then commit + push and reload.
+    func saveProjectSettings(
+        project: BoardProject,
+        name: String,
+        description: String,
+        lanes: [Lane],
+        priorities: [Priority],
+        users: [User],
+        types: [String],
+        unassign: Set<String>
+    ) async {
+        guard let checkoutURL else { return }
+        errorMessage = nil
+        let projectURL = checkoutURL.appendingPathComponent(project.folder, isDirectory: true)
+        do {
+            let readme = BoardStore.renderProjectReadme(
+                name: name, description: description, lanes: lanes,
+                priorities: priorities, users: users, types: types
+            )
+            try readme.write(to: projectURL.appendingPathComponent("README.md"), atomically: true, encoding: .utf8)
+            if !unassign.isEmpty { unassignTasks(in: projectURL, lanes: lanes, members: unassign) }
+
+            syncStatus = "Saving settings…"
+            if hasCommits(at: checkoutURL) { _ = try? await git.pullRebase(at: checkoutURL, auth: auth) }
+            try await git.commit(at: checkoutURL, message: "Update \(name) settings", paths: [project.folder])
+            syncStatus = "Pushing…"
+            try await git.push(at: checkoutURL, auth: auth)
+            syncStatus = "Pushed"
+        } catch {
+            syncStatus = "Error"
+            errorMessage = error.localizedDescription
+        }
+        do {
+            workspace = try BoardStore.loadWorkspace(at: checkoutURL)
+            if let updated = workspace?.projects.first(where: { $0.folder == project.folder }) {
+                selectProject(updated)
+            }
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    /// Remove the `assignee` frontmatter line from any card assigned to a removed member.
+    private func unassignTasks(in projectURL: URL, lanes: [Lane], members: Set<String>) {
+        for lane in lanes where !lane.folder.isEmpty {
+            let laneURL = projectURL.appendingPathComponent(lane.folder, isDirectory: true)
+            let files = (try? FileManager.default.contentsOfDirectory(atPath: laneURL.path)) ?? []
+            for file in files where file.hasSuffix(".md") {
+                let url = laneURL.appendingPathComponent(file)
+                guard var content = try? String(contentsOf: url, encoding: .utf8) else { continue }
+                var lines = content.components(separatedBy: "\n")
+                var inFront = false
+                var changed = false
+                lines = lines.filter { line in
+                    let trimmed = line.trimmingCharacters(in: .whitespaces)
+                    if trimmed == "---" { inFront.toggle(); return true }
+                    if inFront, line.hasPrefix("assignee:") {
+                        let value = String(line.dropFirst("assignee:".count)).trimmingCharacters(in: .whitespaces)
+                        if members.contains(value) { changed = true; return false }
+                    }
+                    return true
+                }
+                if changed {
+                    content = lines.joined(separator: "\n")
+                    try? content.write(to: url, atomically: true, encoding: .utf8)
+                }
+            }
+        }
+    }
+
     /// Reveal a project's folder in Finder.
     func revealInFinder(_ project: BoardProject) {
         guard let checkoutURL else { return }
