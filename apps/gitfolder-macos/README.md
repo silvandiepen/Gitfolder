@@ -5,7 +5,7 @@ Native macOS menu bar app for GitFolder.
 ## Development
 
 ```bash
-cd apps/native-macos
+cd apps/gitfolder-macos
 xcodegen generate
 open GitFolder.xcodeproj
 ```

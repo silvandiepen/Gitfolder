@@ -6,7 +6,7 @@ interval, using system Git under the hood.
 
 This document separates **what ships in the current source** from **what is
 modeled, documented, or claimed but not yet built**. Status reflects the code in
-`apps/native-macos/GitFolder/`, not the marketing site or `docs/` product specs
+`apps/gitfolder-macos/GitFolder/`, not the marketing site or `docs/` product specs
 (several of which describe an earlier or aspirational design — see
 [Decisions.md](Decisions.md)).
 

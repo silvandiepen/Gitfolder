@@ -266,14 +266,16 @@ follow-up.
 
 ---
 
-### 15. Monorepo naming: `apps/native-macos` vs `gitfolder-macos`
+### 15. Monorepo naming: `native-macos` → `gitfolder-macos`
 
-**Decision (pending):** The app currently lives at `apps/native-macos/`. With a
-second product (GitKanban) in the umbrella, the name is ambiguous.
+**Decision (accepted, done):** The app directory was renamed from
+`apps/native-macos/` to `apps/gitfolder-macos/` (GITKIT-007).
 
-**Context:** Root `AGENTS.md` lists GitFolder-macOS at `apps/native-macos/`;
-GITKIT-007 proposes renaming to `apps/gitfolder-macos/`.
+**Context:** With a second product (GitKanban) under the GitKit umbrella,
+`native-macos` was ambiguous — it names a platform, not a product.
 
-**Rationale for deciding:** Consistency with `gitkanban-macos`/`-ios`.
+**Rationale:** Consistency with `gitkanban-macos`/`gitkanban-ios`; the folder now
+names the product it holds. Older branches/PRs and the top-level `docs/` plans may
+still reference `native-macos`.
 
 **Status:** open (GITKIT-007).

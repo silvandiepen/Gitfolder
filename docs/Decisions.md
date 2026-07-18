@@ -72,7 +72,7 @@ rule is *aspirational* for GitFolder and *realized* for GitKanban.
 GitFolder's inline `Services/`. Both native apps depend on it.
 
 **Context.** GitFolder's services (`GitRunner`, `KeychainService`, `GitHubOAuthService`, etc.) were
-written inline in `apps/native-macos`. GitKanban needs the same ones. (GITKIT-005)
+written inline in `apps/gitfolder-macos`. GitKanban needs the same ones. (GITKIT-005)
 
 **Rationale.** Move-and-reference, not copy-and-fork: one implementation, one set of tests, one fix
 site. The extraction is done additively (shared code lands alongside GitFolder's copies, then
@@ -190,12 +190,12 @@ docs *reference* the existing `docs/*.md` plans rather than restating them.
 
 ### 11. Naming and scope cleanup (deferred, tracked)
 
-**Decision.** Rename `apps/native-macos` → `apps/gitfolder-macos` (GITKIT-007), and unify TS package
-scopes under `@gitkit/*` (GITKIT-008) — `packages/core` is still `@gitfolder/core` while
-`packages/gitkanban-core` is already `@gitkit/gitkanban-core`.
+**Decision.** Renamed `apps/native-macos` → `apps/gitfolder-macos` (GITKIT-007, done), and unify TS
+package scopes under `@gitkit/*` (GITKIT-008, still open) — `packages/core` is still `@gitfolder/core`
+while `packages/gitkanban-core` is already `@gitkit/gitkanban-core`.
 
-**Context.** Both names predate the GitKit reframe. With two products, `native-macos` is ambiguous
-and the mixed `@gitfolder` / `@gitkit` scopes are inconsistent.
+**Context.** Both names predate the GitKit reframe. With two products, `native-macos` named a
+platform not a product, and the mixed `@gitfolder` / `@gitkit` scopes are inconsistent.
 
 **Rationale.** Consistency and disambiguation; low-risk internal-only renames. Deferred (P3) because
 they are cosmetic and touch CI paths and scripts, so they are batched rather than done piecemeal.

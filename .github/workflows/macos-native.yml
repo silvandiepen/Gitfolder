@@ -16,13 +16,13 @@ jobs:
         run: brew install xcodegen
       - name: Generate Xcode project
         run: xcodegen generate
-        working-directory: apps/native-macos
+        working-directory: apps/gitfolder-macos
       - name: Test app without signing
         run: xcodebuild -project GitFolder.xcodeproj -scheme GitFolder -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO test
-        working-directory: apps/native-macos
+        working-directory: apps/gitfolder-macos
       - name: Build Release without signing
         run: xcodebuild -project GitFolder.xcodeproj -scheme GitFolder -configuration Release -destination 'generic/platform=macOS' CODE_SIGNING_ALLOWED=NO build
-        working-directory: apps/native-macos
+        working-directory: apps/gitfolder-macos
       - name: Validate archive command shape
         run: xcodebuild -project GitFolder.xcodeproj -scheme GitFolder -configuration Release -destination 'generic/platform=macOS' CODE_SIGNING_ALLOWED=NO -archivePath build/GitFolder.xcarchive archive
-        working-directory: apps/native-macos
+        working-directory: apps/gitfolder-macos

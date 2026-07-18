@@ -41,7 +41,7 @@ configuration with inheritance, and markdown cards with YAML frontmatter.
 
 | App | Location | Platform / stack | Status |
 |---|---|---|---|
-| GitFolder (macOS) | `apps/native-macos/` | SwiftUI + AppKit menu-bar app, XcodeGen | **Shipping** (App Store) |
+| GitFolder (macOS) | `apps/gitfolder-macos/` | SwiftUI + AppKit menu-bar app, XcodeGen | **Shipping** (App Store) |
 | GitFolder (iOS) | `apps/gitfolder-ios/` | SwiftUI, embedded libgit2 (planned) | Planned — docs/spec only; libgit2 spike outstanding |
 | GitKanban (macOS) | `apps/gitkanban-macos/` | SwiftUI board app, XcodeGen | In development — scaffold (XcodeGen project + initial board render) |
 | GitKanban (iOS) | `apps/gitkanban-ios/` | SwiftUI, libgit2 (planned) | Planned — Phase 2, not scaffolded |
@@ -64,7 +64,7 @@ Both native apps depend on one Swift package, **`swift/GitKit`**, so they cannot
     **Pending** — the highest-risk unknown for iOS.
 - **`KeychainService`** — generic Keychain item store. Implemented.
 - **`GitHubOAuthService`** — GitHub device-flow OAuth, Foundation-only (macOS + iOS). Implemented.
-- **Pending extraction** from `apps/native-macos`: `FolderAccessService` (security-scoped
+- **Pending extraction** from `apps/gitfolder-macos`: `FolderAccessService` (security-scoped
   bookmarks), `ConfigStore` (per-app model), `MarkdownStore` (files ⇄ cards). These still live
   in GitFolder and are being moved out as each move can be Xcode-verified.
 
@@ -75,7 +75,7 @@ as the source of truth, and Swift mirrors them. See `docs/Architecture.md`.
 
 For product-level capabilities, see each app's own docs:
 
-- GitFolder (macOS): `apps/native-macos/docs/Features.md` + this repo's `docs/product-spec.md`,
+- GitFolder (macOS): `apps/gitfolder-macos/docs/Features.md` + this repo's `docs/product-spec.md`,
   `docs/data-model.md`, `docs/sync-model.md`, `docs/github-access.md`, `docs/macos-permissions.md`.
 - GitFolder (iOS): `apps/gitfolder-ios/docs/Features.md`.
 - GitKanban (macOS): `apps/gitkanban-macos/README.md`; board contract in

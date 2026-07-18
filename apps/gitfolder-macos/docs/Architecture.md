@@ -1,7 +1,7 @@
 # GitFolder (macOS) — Architecture
 
 How the GitFolder macOS app is built. Scope: the shipping SwiftUI/AppKit target
-under `apps/native-macos/GitFolder/` and its dependency on the shared
+under `apps/gitfolder-macos/GitFolder/` and its dependency on the shared
 `swift/GitKit` package. Reflects the current source, not the aspirational
 `docs/`/`packages/core` model.
 
@@ -169,7 +169,7 @@ verifies the move. This is the "extract app services over time" direction
 - **XcodeGen** owns the project: edit **`project.yml`**, never the generated
   `GitFolder.xcodeproj` (which is git-ignored). Regenerate with
   `npm run macos:generate` (root script) or `xcodegen generate` in
-  `apps/native-macos/`.
+  `apps/gitfolder-macos/`.
 - SwiftPM dependencies declared in `project.yml`: `GitKit` (local path
   `../../swift/GitKit`) and `git-pont` (remote, **branch-pinned** — Decision 11).
 - Entitlements: `com.apple.security.app-sandbox`, `network.client`,

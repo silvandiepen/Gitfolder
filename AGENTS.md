@@ -12,7 +12,7 @@ source of truth.
 
 | App | Home | Platform | Status |
 |---|---|---|---|
-| GitFolder (macOS) | `apps/native-macos/` | SwiftUI/AppKit menu-bar app | Shipping (App Store) |
+| GitFolder (macOS) | `apps/gitfolder-macos/` | SwiftUI/AppKit menu-bar app | Shipping (App Store) |
 | GitFolder (iOS) | `apps/gitfolder-ios/` | SwiftUI (planned) | Roadmap — libgit2 spike + plan |
 | GitKanban (macOS) | `apps/gitkanban-macos/` | SwiftUI board app | In development (scaffold) |
 | GitKanban (iOS) | `apps/gitkanban-ios/` | SwiftUI (planned) | Roadmap — Phase 2 |
@@ -25,7 +25,7 @@ When a per-app rule conflicts with this file, **the per-app file wins**.
 
 ```txt
 apps/
-  native-macos/       GitFolder — macOS menu-bar app (SwiftUI/AppKit, XcodeGen)
+  gitfolder-macos/    GitFolder — macOS menu-bar app (SwiftUI/AppKit, XcodeGen)
   gitfolder-ios/      GitFolder — iOS app (planned; docs/spec only)
   gitkanban-macos/    GitKanban — macOS board app (scaffold)
   gitkanban-ios/      GitKanban — iOS app (planned; docs/spec only)

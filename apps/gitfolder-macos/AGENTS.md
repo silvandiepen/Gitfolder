@@ -14,12 +14,12 @@ Git. Menu-bar-only (`LSUIElement`), local-first, no backend. See
 
 ## Where things live
 
-- **Code:** `apps/native-macos/GitFolder/` — `App/` (`GitFolderApp`, `AppModel`),
-  `Services/`, `Models/`, `Views/`. Tests in `apps/native-macos/Tests/`.
+- **Code:** `apps/gitfolder-macos/GitFolder/` — `App/` (`GitFolderApp`, `AppModel`),
+  `Services/`, `Models/`, `Views/`. Tests in `apps/gitfolder-macos/Tests/`.
 - **Shared Swift:** `../../swift/GitKit` — `KeychainService`, `GitHubOAuthService`
   (consumed today); `GitEngine`/`ShellGitEngine` and further extractions in
   progress. Put cross-app logic here, not in the app.
-- **App docs:** `apps/native-macos/docs/{Features,Decisions,Architecture}.md`.
+- **App docs:** `apps/gitfolder-macos/docs/{Features,Decisions,Architecture}.md`.
 - **Product plans:** repo `docs/` (product-spec, sync-model, data-model, …) —
   note several describe an SSH-first/aspirational design the app no longer
   matches; treat this app's `docs/` and the code as authoritative.
@@ -29,8 +29,8 @@ Git. Menu-bar-only (`LSUIElement`), local-first, no backend. See
 
 ```bash
 npm run macos:generate          # xcodegen generate (from repo root)
-# or:  cd apps/native-macos && xcodegen generate
-open apps/native-macos/GitFolder.xcodeproj   # then build/run in Xcode
+# or:  cd apps/gitfolder-macos && xcodegen generate
+open apps/gitfolder-macos/GitFolder.xcodeproj   # then build/run in Xcode
 ```
 
 - CI is `.github/workflows/macos-native.yml` (runs `xcodegen generate` +
@@ -65,5 +65,5 @@ entitlements, Info.plist keys, and signing all live in `project.yml`.
 - **`SettingsView.swift` is a large multi-purpose file** with duplicated OAuth /
   branch-loading orchestration (GITFOLDER-018); prefer consolidating over adding
   a third copy.
-- The monorepo folder may be renamed `native-macos` → `gitfolder-macos`
-  (GITKIT-007); use paths from the root `AGENTS.md` if in doubt.
+- This app was renamed `native-macos` → `gitfolder-macos` (GITKIT-007); older
+  branches, PRs, and the top-level `docs/` plans may still say `native-macos`.

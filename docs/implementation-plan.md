@@ -4,7 +4,7 @@
 
 **Goal:** Build GitFolder as a paid Mac App Store utility with a native macOS app and a small docs/marketing website in one npm monorepo.
 
-**Architecture:** Use an npm workspace monorepo for shared TypeScript contracts, the website, and build tooling. Keep the macOS app native SwiftUI/AppKit with XcodeGen under `apps/native-macos`. Shared data contracts live in `packages/core` as TypeScript source and documentation; Swift models mirror those contracts manually in Phase 1.
+**Architecture:** Use an npm workspace monorepo for shared TypeScript contracts, the website, and build tooling. Keep the macOS app native SwiftUI/AppKit with XcodeGen under `apps/gitfolder-macos`. Shared data contracts live in `packages/core` as TypeScript source and documentation; Swift models mirror those contracts manually in Phase 1.
 
 **Tech Stack:** npm workspaces, TypeScript, Vitest, Vue 3 + Vite for the website, SwiftUI/AppKit for macOS, XcodeGen for native project generation, GitHub Actions for validation, and Mac App Store distribution.
 
@@ -29,7 +29,7 @@ This matters technically. We do not need a billing backend, license server, Padd
 ```txt
 Gitfolder/
 ├─ apps/
-│  ├─ native-macos/
+│  ├─ gitfolder-macos/
 │  │  ├─ project.yml
 │  │  ├─ README.md
 │  │  ├─ GitFolder/
@@ -93,7 +93,7 @@ The root `package.json` should expose boring scripts:
     "site:dev": "npm run dev -w apps/website",
     "site:build": "npm run build -w apps/website",
     "core:build": "npm run build -w packages/core",
-    "macos:generate": "cd apps/native-macos && xcodegen generate"
+    "macos:generate": "cd apps/gitfolder-macos && xcodegen generate"
   },
   "workspaces": [
     "apps/*",
@@ -143,7 +143,7 @@ Root `package.json`:
     "site:dev": "npm run dev -w apps/website",
     "site:build": "npm run build -w apps/website",
     "core:build": "npm run build -w packages/core",
-    "macos:generate": "cd apps/native-macos && xcodegen generate"
+    "macos:generate": "cd apps/gitfolder-macos && xcodegen generate"
   }
 }
 ```
@@ -161,9 +161,9 @@ coverage/
 .env.*
 !.env.example
 *.tgz
-apps/native-macos/*.xcodeproj/
-apps/native-macos/DerivedData/
-apps/native-macos/build/
+apps/gitfolder-macos/*.xcodeproj/
+apps/gitfolder-macos/DerivedData/
+apps/gitfolder-macos/build/
 ```
 
 **Validation:**
@@ -237,12 +237,12 @@ git commit -m "feat: add core data contracts"
 
 **Files:**
 
-- Create: `apps/native-macos/project.yml`
-- Create: `apps/native-macos/README.md`
-- Create: `apps/native-macos/GitFolder/Info.plist`
-- Create: `apps/native-macos/GitFolder/GitFolder.entitlements`
-- Create: `apps/native-macos/GitFolder/App/GitFolderApp.swift`
-- Create: `apps/native-macos/GitFolder/App/AppModel.swift`
+- Create: `apps/gitfolder-macos/project.yml`
+- Create: `apps/gitfolder-macos/README.md`
+- Create: `apps/gitfolder-macos/GitFolder/Info.plist`
+- Create: `apps/gitfolder-macos/GitFolder/GitFolder.entitlements`
+- Create: `apps/gitfolder-macos/GitFolder/App/GitFolderApp.swift`
+- Create: `apps/gitfolder-macos/GitFolder/App/AppModel.swift`
 
 **Implementation notes:**
 
@@ -261,7 +261,7 @@ Do not commit generated `.xcodeproj`.
 **Validation:**
 
 ```bash
-cd apps/native-macos
+cd apps/gitfolder-macos
 xcodegen generate
 ```
 
@@ -270,7 +270,7 @@ On VPS/Linux, only validate file shape. Real build happens in macOS GitHub Actio
 **Commit:**
 
 ```bash
-git add apps/native-macos .gitignore package.json
+git add apps/gitfolder-macos .gitignore package.json
 git commit -m "feat: scaffold native macos app"
 ```
 
@@ -280,10 +280,10 @@ git commit -m "feat: scaffold native macos app"
 
 **Files:**
 
-- Create: `apps/native-macos/GitFolder/Services/StatusBarController.swift`
-- Create: `apps/native-macos/GitFolder/Views/Menu/MenuContentView.swift`
-- Modify: `apps/native-macos/GitFolder/App/GitFolderApp.swift`
-- Modify: `apps/native-macos/GitFolder/App/AppModel.swift`
+- Create: `apps/gitfolder-macos/GitFolder/Services/StatusBarController.swift`
+- Create: `apps/gitfolder-macos/GitFolder/Views/Menu/MenuContentView.swift`
+- Modify: `apps/gitfolder-macos/GitFolder/App/GitFolderApp.swift`
+- Modify: `apps/gitfolder-macos/GitFolder/App/AppModel.swift`
 
 **Required menu:**
 
@@ -305,7 +305,7 @@ Build/run on macOS and confirm no main window opens by default.
 **Commit:**
 
 ```bash
-git add apps/native-macos
+git add apps/gitfolder-macos
 git commit -m "feat: add menu bar shell"
 ```
 
@@ -315,10 +315,10 @@ git commit -m "feat: add menu bar shell"
 
 **Files:**
 
-- Create: `apps/native-macos/GitFolder/Models/GitFolderConfig.swift`
-- Create: `apps/native-macos/GitFolder/Models/SyncedFolder.swift`
-- Create: `apps/native-macos/GitFolder/Services/ConfigStore.swift`
-- Create: `apps/native-macos/Tests/ConfigStoreTests.swift`
+- Create: `apps/gitfolder-macos/GitFolder/Models/GitFolderConfig.swift`
+- Create: `apps/gitfolder-macos/GitFolder/Models/SyncedFolder.swift`
+- Create: `apps/gitfolder-macos/GitFolder/Services/ConfigStore.swift`
+- Create: `apps/gitfolder-macos/Tests/ConfigStoreTests.swift`
 
 **Rules:**
 
@@ -334,7 +334,7 @@ Run native tests in Xcode or macOS CI.
 **Commit:**
 
 ```bash
-git add apps/native-macos
+git add apps/gitfolder-macos
 git commit -m "feat: add local config storage"
 ```
 
@@ -344,9 +344,9 @@ git commit -m "feat: add local config storage"
 
 **Files:**
 
-- Create: `apps/native-macos/GitFolder/Services/FolderAccessService.swift`
-- Create: `apps/native-macos/GitFolder/Views/Folders/AddFolderView.swift`
-- Modify: `apps/native-macos/GitFolder/Models/SyncedFolder.swift`
+- Create: `apps/gitfolder-macos/GitFolder/Services/FolderAccessService.swift`
+- Create: `apps/gitfolder-macos/GitFolder/Views/Folders/AddFolderView.swift`
+- Modify: `apps/gitfolder-macos/GitFolder/Models/SyncedFolder.swift`
 
 **Rules:**
 
@@ -362,7 +362,7 @@ Add a folder, restart app, verify folder access still works.
 **Commit:**
 
 ```bash
-git add apps/native-macos
+git add apps/gitfolder-macos
 git commit -m "feat: add folder access bookmarks"
 ```
 
@@ -372,9 +372,9 @@ git commit -m "feat: add folder access bookmarks"
 
 **Files:**
 
-- Create: `apps/native-macos/GitFolder/Services/GitRunner.swift`
-- Create: `apps/native-macos/GitFolder/Models/GitCommandResult.swift`
-- Create: `apps/native-macos/Tests/GitRunnerTests.swift`
+- Create: `apps/gitfolder-macos/GitFolder/Services/GitRunner.swift`
+- Create: `apps/gitfolder-macos/GitFolder/Models/GitCommandResult.swift`
+- Create: `apps/gitfolder-macos/Tests/GitRunnerTests.swift`
 
 **Rules:**
 
@@ -391,7 +391,7 @@ Test `git --version`, `git status --porcelain`, and failure handling in a temp d
 **Commit:**
 
 ```bash
-git add apps/native-macos
+git add apps/gitfolder-macos
 git commit -m "feat: add git command runner"
 ```
 
@@ -401,9 +401,9 @@ git commit -m "feat: add git command runner"
 
 **Files:**
 
-- Create: `apps/native-macos/GitFolder/Services/RepositoryInspector.swift`
-- Create: `apps/native-macos/GitFolder/Models/GitRepositoryState.swift`
-- Create: `apps/native-macos/Tests/RepositoryInspectorTests.swift`
+- Create: `apps/gitfolder-macos/GitFolder/Services/RepositoryInspector.swift`
+- Create: `apps/gitfolder-macos/GitFolder/Models/GitRepositoryState.swift`
+- Create: `apps/gitfolder-macos/Tests/RepositoryInspectorTests.swift`
 
 **Must detect:**
 
@@ -424,7 +424,7 @@ Use temp Git repos in tests.
 **Commit:**
 
 ```bash
-git add apps/native-macos
+git add apps/gitfolder-macos
 git commit -m "feat: inspect git repository state"
 ```
 
@@ -434,9 +434,9 @@ git commit -m "feat: inspect git repository state"
 
 **Files:**
 
-- Create: `apps/native-macos/GitFolder/Services/SafetyScanner.swift`
-- Create: `apps/native-macos/GitFolder/Models/FolderSafetyState.swift`
-- Create: `apps/native-macos/Tests/SafetyScannerTests.swift`
+- Create: `apps/gitfolder-macos/GitFolder/Services/SafetyScanner.swift`
+- Create: `apps/gitfolder-macos/GitFolder/Models/FolderSafetyState.swift`
+- Create: `apps/gitfolder-macos/Tests/SafetyScannerTests.swift`
 
 **Minimum patterns:**
 
@@ -462,7 +462,7 @@ id_ed25519
 **Commit:**
 
 ```bash
-git add apps/native-macos
+git add apps/gitfolder-macos
 git commit -m "feat: add folder safety scan"
 ```
 
@@ -472,9 +472,9 @@ git commit -m "feat: add folder safety scan"
 
 **Files:**
 
-- Create: `apps/native-macos/GitFolder/Services/SyncEngine.swift`
-- Create: `apps/native-macos/GitFolder/Models/SyncRun.swift`
-- Create: `apps/native-macos/Tests/SyncEngineTests.swift`
+- Create: `apps/gitfolder-macos/GitFolder/Services/SyncEngine.swift`
+- Create: `apps/gitfolder-macos/GitFolder/Models/SyncRun.swift`
+- Create: `apps/gitfolder-macos/Tests/SyncEngineTests.swift`
 
 **Safe algorithm:**
 
@@ -500,7 +500,7 @@ Do not auto-resolve conflicts. Do not force push.
 **Commit:**
 
 ```bash
-git add apps/native-macos
+git add apps/gitfolder-macos
 git commit -m "feat: add safe sync engine"
 ```
 
@@ -510,9 +510,9 @@ git commit -m "feat: add safe sync engine"
 
 **Files:**
 
-- Create: `apps/native-macos/GitFolder/Services/SyncScheduler.swift`
-- Modify: `apps/native-macos/GitFolder/Services/StatusBarController.swift`
-- Modify: `apps/native-macos/GitFolder/App/AppModel.swift`
+- Create: `apps/gitfolder-macos/GitFolder/Services/SyncScheduler.swift`
+- Modify: `apps/gitfolder-macos/GitFolder/Services/StatusBarController.swift`
+- Modify: `apps/gitfolder-macos/GitFolder/App/AppModel.swift`
 
 **Rules:**
 
@@ -524,7 +524,7 @@ git commit -m "feat: add safe sync engine"
 **Commit:**
 
 ```bash
-git add apps/native-macos
+git add apps/gitfolder-macos
 git commit -m "feat: add sync scheduler"
 ```
 
@@ -534,9 +534,9 @@ git commit -m "feat: add sync scheduler"
 
 **Files:**
 
-- Create: `apps/native-macos/GitFolder/Services/LogStore.swift`
-- Create: `apps/native-macos/GitFolder/Models/UserFacingError.swift`
-- Create: `apps/native-macos/GitFolder/Views/Logs/LogsView.swift`
+- Create: `apps/gitfolder-macos/GitFolder/Services/LogStore.swift`
+- Create: `apps/gitfolder-macos/GitFolder/Models/UserFacingError.swift`
+- Create: `apps/gitfolder-macos/GitFolder/Views/Logs/LogsView.swift`
 
 **Rules:**
 
@@ -547,7 +547,7 @@ git commit -m "feat: add sync scheduler"
 **Commit:**
 
 ```bash
-git add apps/native-macos
+git add apps/gitfolder-macos
 git commit -m "feat: add local logs"
 ```
 

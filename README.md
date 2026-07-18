@@ -15,7 +15,7 @@ source of truth. They share the same git plumbing, so it lives in one repo.
 
 ```txt
 apps/
-  native-macos/       GitFolder — macOS menu-bar app (SwiftUI/AppKit, XcodeGen)
+  gitfolder-macos/    GitFolder — macOS menu-bar app (SwiftUI/AppKit, XcodeGen)
   gitkanban-macos/    GitKanban — macOS board app (scaffold)
   website/            Marketing/docs site (Vue 3 + Vite)
 packages/

@@ -12,7 +12,7 @@ Implemented:
 - ✅ `KeychainService` — generic keychain item store (service/account configurable)
 - ✅ `GitHubOAuthService` — GitHub device-flow OAuth (Foundation-only; macOS + iOS)
 
-Pending extraction from `apps/native-macos` (need an Xcode build to verify the app still compiles):
+Pending extraction from `apps/gitfolder-macos` (need an Xcode build to verify the app still compiles):
 - `FolderAccessService` (AppKit + security-scoped bookmarks; entangled with the app's model)
 - `ConfigStore` (per-app model — GitFolder folders vs GitKanban boards)
 - `MarkdownStore` — files ⇄ cards, mirroring `@gitkit/gitkanban-core`

@@ -34,7 +34,7 @@ A Phase 0 spike (see below) exists to answer this before any UI work begins.
 | iOS git-transport rationale | `Projects/GitKit/GitKanban/plan/platforms-and-git.md` |
 | libgit2 iOS spike (branch, not in working tree) | `spikes/libgit2-ios/` on `origin/claude/gitfolder-audit-ios-plan-w4ayyo` |
 | Shared Swift package (the `GitEngine` both platforms share) | `swift/GitKit/README.md` |
-| macOS app this mirrors | `apps/native-macos/README.md` |
+| macOS app this mirrors | `apps/gitfolder-macos/README.md` |
 
 ### Task cards (GITFOLDER-028 .. 035)
 

@@ -9,7 +9,7 @@ plans live in this repo's `docs/*.md` and are referenced, not restated, here.
 
 ```txt
 apps/
-  native-macos/       GitFolder — macOS menu-bar app (SwiftUI/AppKit, XcodeGen). Shipping.
+  gitfolder-macos/    GitFolder — macOS menu-bar app (SwiftUI/AppKit, XcodeGen). Shipping.
                       (rename → gitfolder-macos is tracked: GITKIT-007)
   gitfolder-ios/      GitFolder — iOS app. Planned; docs/spec only, no code.
   gitkanban-macos/    GitKanban — macOS board app (SwiftUI, XcodeGen). In development (scaffold).
@@ -33,7 +33,7 @@ Apps depend on packages, **never on each other**. Shared logic belongs in a pack
 `swift/GitKit` (Swift) or `packages/*` (TypeScript) — not a cross-app import.
 
 ```txt
-        apps/native-macos ─┐            ┌─ apps/gitfolder-ios (planned)
+        apps/gitfolder-macos ─┐            ┌─ apps/gitfolder-ios (planned)
    apps/gitkanban-macos ───┼── depend ──┤
     apps/gitkanban-ios ────┘   on       └─  (never on each other)
                                 │
