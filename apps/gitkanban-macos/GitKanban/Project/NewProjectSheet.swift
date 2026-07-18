@@ -346,7 +346,7 @@ struct NewProjectSheet: View {
         }
 
         name = config.project ?? editing.name
-        description = ""
+        description = model.projectDescription(for: editing)
 
         originalLanes = config.lanes
         laneItems = config.lanes.map { lane in
@@ -412,6 +412,11 @@ struct NewProjectSheet: View {
         // added lanes derive a folder from their name and get created on disk.
         var newLanes: [Lane] = []
         var createFolders: [String] = []
+        // Seed the "already taken" sets from the lanes we're keeping, so an added lane
+        // can't collide in id/status or (case-insensitively) folder with an existing one.
+        let kept = laneItems.compactMap { laneOrigins[$0.id] }
+        var usedIDs = Set(kept.map(\.id))
+        var usedFolders = Set(kept.map { $0.folder.lowercased() })
         for item in laneItems {
             let laneName = item.text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !laneName.isEmpty else { continue }
@@ -419,8 +424,14 @@ struct NewProjectSheet: View {
                 newLanes.append(Lane(id: orig.id, name: laneName, folder: orig.folder,
                                      status: orig.status, terminal: orig.terminal, backlog: orig.backlog))
             } else {
-                let status = laneSlug(laneName)
-                let lane = Lane(id: status, name: laneName, folder: laneName, status: status)
+                let base = laneSlug(laneName).isEmpty ? "lane" : laneSlug(laneName)
+                var status = base, n = 2
+                while usedIDs.contains(status) { status = "\(base)-\(n)"; n += 1 }
+                usedIDs.insert(status)
+                var folder = laneName, m = 2
+                while usedFolders.contains(folder.lowercased()) { folder = "\(laneName) \(m)"; m += 1 }
+                usedFolders.insert(folder.lowercased())
+                let lane = Lane(id: status, name: laneName, folder: folder, status: status)
                 newLanes.append(lane)
                 createFolders.append(lane.folder)
             }

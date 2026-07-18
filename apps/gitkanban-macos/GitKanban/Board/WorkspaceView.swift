@@ -49,14 +49,20 @@ struct WorkspaceView: View {
                                     )
                                     .tag(rowKey(connected.id, project.id))
                                     .contextMenu {
-                                        Button("Project Settings…") { model.settingsProject = project }
-                                        Button("Reveal in Finder") { model.revealInFinder(project) }
+                                        Button("Project Settings…") {
+                                            model.openProject(project, in: connected)
+                                            model.settingsProject = project
+                                        }
+                                        Button("Reveal in Finder") {
+                                            model.openProject(project, in: connected)
+                                            model.revealInFinder(project)
+                                        }
                                         Divider()
                                         Button("New Project in \(connected.repo.name)…") {
                                             model.activate(connected, project: nil)
                                             model.isShowingNewProjectSheet = true
                                         }
-                                        Button("Refresh") { Task { await model.refresh() } }
+                                        Button("Refresh") { Task { await model.refreshRepo(connected) } }
                                     }
                                 }
                             }
@@ -180,10 +186,7 @@ struct WorkspaceView: View {
                     model.activate(connected, project: nil)
                     model.isShowingNewProjectSheet = true
                 }
-                Button("Refresh") {
-                    model.activate(connected, project: connected.workspace?.projects.first)
-                    Task { await model.refresh() }
-                }
+                Button("Refresh") { Task { await model.refreshRepo(connected) } }
                 Divider()
                 Button("Disconnect", role: .destructive) { model.disconnectRepo(connected) }
             } label: {

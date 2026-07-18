@@ -156,7 +156,8 @@ final class AppModel {
             for repo in toConnect {
                 await connect(repo, activate: false)
             }
-            persistConnectedRepos()
+            // Deliberately do NOT re-persist here: restore is a read, and a transient
+            // failure connecting one repo must never rewrite (shrink) the saved list.
 
             // Activate the last-active repo + project (or the first available).
             let lastRepoName = loadLastRepo()?.fullName
@@ -254,7 +255,9 @@ final class AppModel {
             if FileManager.default.fileExists(atPath: gitDir.path) {
                 if hasCommits(at: dir) {
                     syncStatus = "Pulling…"
-                    _ = try await git.pullRebase(at: dir, auth: auth)
+                    // Best-effort: a failed pull (offline, expired token) must not drop
+                    // the repo — the local checkout still renders and stays connected.
+                    _ = try? await git.pullRebase(at: dir, auth: auth)
                 } else {
                     // Local branch is unborn; adopt the remote's commits if it has any.
                     syncStatus = "Syncing…"
@@ -305,16 +308,31 @@ final class AppModel {
         persistLastProject(project)
     }
 
-    /// Re-pull the active repo and reload its board (Refresh action).
+    /// Re-pull the active repo and reload its board (Refresh action), preserving the
+    /// open project. No-op reselection if the user switched repos during the pull.
     func refresh() async {
         guard let repo = activeRepo else { return }
-        let keepProject = selectedProject?.folder
+        await refreshRepo(repo)
+    }
+
+    /// Reconnect a specific repo (pull + reload workspace). Only re-applies the board
+    /// if that repo is still the active one, so a mid-pull switch isn't clobbered.
+    func refreshRepo(_ connected: ConnectedRepo) async {
+        await refreshRepo(connected.repo)
+    }
+
+    private func refreshRepo(_ repo: GitHubRepo) async {
+        let wasActive = activeRepo?.fullName == repo.fullName
+        let keepProject = wasActive ? selectedProject?.folder : nil
         await connect(repo, activate: false)
-        if let active = connectedRepos.first(where: { $0.repo.fullName == repo.fullName }) {
-            let project = active.workspace?.projects.first { $0.folder == keepProject }
-                ?? active.workspace?.projects.first
-            activate(active, project: project)
-        }
+        // Only touch the active board view if this repo is (still) the active one.
+        guard activeRepo?.fullName == repo.fullName,
+              let active = connectedRepos.first(where: { $0.repo.fullName == repo.fullName })
+        else { return }
+        workspace = active.workspace
+        let project = active.workspace?.projects.first { $0.folder == keepProject }
+            ?? active.workspace?.projects.first
+        if let project { selectProject(project) }
     }
 
     /// Disconnect a repo: drop it from the sidebar (its checkout stays on disk). If it
@@ -336,13 +354,19 @@ final class AppModel {
         }
     }
 
-    /// Copy the active workspace back into its `connectedRepos` entry so the sidebar
-    /// reflects project add/remove after a mutation reloads the workspace.
-    private func syncActiveWorkspaceToConnected() {
-        guard let activeRepo, let workspace,
-              let index = connectedRepos.firstIndex(where: { $0.repo.fullName == activeRepo.fullName })
-        else { return }
-        connectedRepos[index].workspace = workspace
+    /// After a mutation reloads a specific repo's workspace from disk, write it back
+    /// into that repo's `connectedRepos` entry, and update the active board view only
+    /// if that repo is still the active one (so a mid-write repo switch isn't clobbered).
+    private func applyWorkspaceReload(repoFullName: String, at url: URL, selectFolder: String?) {
+        guard let reloaded = try? BoardStore.loadWorkspace(at: url) else { return }
+        if let index = connectedRepos.firstIndex(where: { $0.repo.fullName == repoFullName }) {
+            connectedRepos[index].workspace = reloaded
+        }
+        guard activeRepo?.fullName == repoFullName else { return }
+        workspace = reloaded
+        if let selectFolder, let project = reloaded.projects.first(where: { $0.folder == selectFolder }) {
+            selectProject(project)
+        }
     }
 
     // MARK: - Projects
@@ -399,6 +423,7 @@ final class AppModel {
         isCreatingProject = true
         errorMessage = nil
         defer { isCreatingProject = false }
+        let targetRepo = activeRepo?.fullName ?? ""
 
         do {
             try FileManager.default.createDirectory(at: projectURL, withIntermediateDirectories: true)
@@ -435,15 +460,7 @@ final class AppModel {
             errorMessage = error.localizedDescription
         }
 
-        do {
-            workspace = try BoardStore.loadWorkspace(at: checkoutURL)
-            syncActiveWorkspaceToConnected()
-            if let project = workspace?.projects.first(where: { $0.folder == name }) {
-                selectProject(project)
-            }
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+        applyWorkspaceReload(repoFullName: targetRepo, at: checkoutURL, selectFolder: name)
     }
 
     /// Create a task (card) in the given lane of the current project: write a new
@@ -889,6 +906,7 @@ final class AppModel {
     ) async {
         guard let checkoutURL else { return }
         errorMessage = nil
+        let targetRepo = activeRepo?.fullName ?? ""
         let projectURL = checkoutURL.appendingPathComponent(project.folder, isDirectory: true)
         do {
             let readme = BoardStore.renderProjectReadme(
@@ -920,13 +938,7 @@ final class AppModel {
             syncStatus = "Error"
             errorMessage = error.localizedDescription
         }
-        do {
-            workspace = try BoardStore.loadWorkspace(at: checkoutURL)
-            syncActiveWorkspaceToConnected()
-            if let updated = workspace?.projects.first(where: { $0.folder == project.folder }) {
-                selectProject(updated)
-            }
-        } catch { errorMessage = error.localizedDescription }
+        applyWorkspaceReload(repoFullName: targetRepo, at: checkoutURL, selectFolder: project.folder)
     }
 
     /// Move every card out of a removed lane's folder into the target lane (updating
@@ -962,7 +974,11 @@ final class AppModel {
                     let trimmed = line.trimmingCharacters(in: .whitespaces)
                     if trimmed == "---" { inFront.toggle(); return true }
                     if inFront, line.hasPrefix("assignee:") {
-                        let value = String(line.dropFirst("assignee:".count)).trimmingCharacters(in: .whitespaces)
+                        var value = String(line.dropFirst("assignee:".count)).trimmingCharacters(in: .whitespaces)
+                        // Unquote YAML scalars (ids with ':' / '#' are written quoted).
+                        if value.count >= 2, value.hasPrefix("\""), value.hasSuffix("\"") {
+                            value = String(value.dropFirst().dropLast()).replacingOccurrences(of: "\\\"", with: "\"")
+                        }
                         if members.contains(value) { changed = true; return false }
                     }
                     return true
@@ -973,6 +989,22 @@ final class AppModel {
                 }
             }
         }
+    }
+
+    /// The project README's body — everything after the frontmatter and the leading
+    /// "# Title" heading. This is the "description" the create/settings sheet edits;
+    /// reading it back lets Settings round-trip prose instead of blanking it.
+    func projectDescription(for project: BoardProject) -> String {
+        guard let checkoutURL else { return "" }
+        let url = checkoutURL
+            .appendingPathComponent(project.folder, isDirectory: true)
+            .appendingPathComponent("README.md")
+        guard let content = try? String(contentsOf: url, encoding: .utf8) else { return "" }
+        let (_, body) = BoardMarkdown.splitFrontmatter(content)
+        var lines = body.components(separatedBy: "\n")
+        while let first = lines.first, first.trimmingCharacters(in: .whitespaces).isEmpty { lines.removeFirst() }
+        if let first = lines.first, first.hasPrefix("# ") { lines.removeFirst() }
+        return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// Reveal a project's folder in Finder.
