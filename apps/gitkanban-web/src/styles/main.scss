@@ -1,0 +1,546 @@
+@use "@sil/ui/defaults";
+
+:root {
+  --space-xs: calc(var(--space) / 4);
+  --space-s: calc(var(--space) / 2);
+  --space: 1rem;
+  --space-m: calc(var(--space) * 1);
+  --space-l: calc(var(--space) * 2);
+  --space-xl: calc(var(--space) * 4);
+  --border-radius-s: calc(var(--border-radius) / 2);
+  --border-radius: 0.5rem;
+  --border-radius-l: calc(var(--border-radius) * 1.5);
+  --border-radius-xl: calc(var(--border-radius) * 2);
+  --border-width: 1px;
+  --font-size-xs: calc(var(--font-size) * 0.75);
+  --font-size-s: calc(var(--font-size) * 0.875);
+  --font-size: 1rem;
+  --font-size-m: calc(var(--font-size) * 1);
+  --font-size-l: calc(var(--font-size) * 1.25);
+  --font-size-xl: calc(var(--font-size) * 1.5);
+  --font-size-xxl: calc(var(--font-size) * 2);
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-family-body: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-family-mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  --line-height-tight: 1.15;
+  --line-height-normal: 1.5;
+  --transition: 0.2s ease;
+  --transition-fast: 0.12s ease;
+  --color-background: #f4f5f7;
+  --color-foreground: #14171f;
+  --color-surface: #ffffff;
+  --color-surface-raised: #fbfcfd;
+  --color-border: #e4e7ec;
+  --color-muted: color-mix(in srgb, var(--color-foreground) 62%, var(--color-background));
+  --color-subtle: color-mix(in srgb, var(--color-foreground) 42%, var(--color-background));
+  --color-accent: #ef5b3c;
+  --color-accent-dark: #c23c22;
+  --color-accent-tint: #fdeae5;
+  --shadow-s: 0 1px 2px color-mix(in srgb, var(--color-foreground), transparent 92%);
+  --shadow-m: 0 4px 16px color-mix(in srgb, var(--color-foreground), transparent 90%);
+}
+
+:root[data-theme="dark"] {
+  --color-background: #101218;
+  --color-foreground: #eceef3;
+  --color-surface: #191c25;
+  --color-surface-raised: #202431;
+  --color-border: #2a2e3b;
+  --color-accent-tint: #2e1712;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100vh;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-family-body);
+  font-size: var(--font-size);
+  line-height: var(--line-height-normal);
+  color: var(--color-foreground);
+  background: var(--color-background);
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.gitkanban-web {
+  min-height: 100vh;
+
+  &__connect {
+    display: grid;
+    min-height: 100vh;
+    place-items: center;
+    padding: var(--space-l);
+  }
+
+  &__connect-panel {
+    display: grid;
+    width: min(100%, calc(var(--space-xl) * 10));
+    gap: var(--space-l);
+    padding: var(--space-l);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--border-radius-xl);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-m);
+  }
+
+  &__mark {
+    display: grid;
+    width: calc(var(--space-xl) * 1.4);
+    aspect-ratio: 1;
+    place-items: center;
+    border-radius: var(--border-radius-l);
+    color: white;
+    background: var(--color-accent);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  &__connect-copy,
+  &__token-form,
+  &__advanced,
+  &__field,
+  &__toolbar-title,
+  &__sidebar-header,
+  &__repo-list,
+  &__projectbar,
+  &__history,
+  &__list-section {
+    display: grid;
+    gap: var(--space-s);
+  }
+
+  &__summary {
+    color: var(--color-muted);
+    cursor: pointer;
+    font-size: var(--font-size-s);
+  }
+
+  &__title,
+  &__board-title,
+  &__detail-title,
+  &__list-title {
+    margin: 0;
+    line-height: var(--line-height-tight);
+  }
+
+  &__title {
+    font-size: var(--font-size-xxl);
+  }
+
+  &__muted,
+  &__hint,
+  &__repo-meta,
+  &__project-meta,
+  &__account,
+  &__card-meta,
+  &__row-meta,
+  &__eyebrow {
+    color: var(--color-muted);
+    font-size: var(--font-size-s);
+  }
+
+  &__hint {
+    color: var(--color-subtle);
+  }
+
+  &__label,
+  &__section-head,
+  &__eyebrow {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  &__input,
+  &__detail-input,
+  &__search,
+  &__select {
+    width: 100%;
+    min-height: calc(var(--space-l) * 1.35);
+    padding: var(--space-s) var(--space);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--border-radius);
+    color: var(--color-foreground);
+    background: var(--color-surface-raised);
+  }
+
+  &__detail-input {
+    border: 0;
+    padding: 0;
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--line-height-tight);
+    background: transparent;
+  }
+
+  &__primary,
+  &__secondary,
+  &__ghost,
+  &__icon-button,
+  &__segment,
+  &__close {
+    border: 0;
+    border-radius: var(--border-radius);
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+  }
+
+  &__primary {
+    min-height: calc(var(--space-l) * 1.35);
+    padding: var(--space-s) var(--space);
+    color: white;
+    background: var(--color-accent);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  &__secondary,
+  &__ghost,
+  &__icon-button,
+  &__close {
+    padding: var(--space-s) var(--space);
+    color: var(--color-foreground);
+    background: color-mix(in srgb, var(--color-foreground), transparent 94%);
+  }
+
+  &__workspace {
+    display: grid;
+    grid-template-columns: minmax(calc(var(--space-xl) * 4), calc(var(--space-xl) * 5.2)) minmax(calc(var(--space-xl) * 3.6), calc(var(--space-xl) * 4.6)) 1fr auto;
+    min-height: 100vh;
+  }
+
+  &__sidebar,
+  &__projectbar,
+  &__detail {
+    border-right: var(--border-width) solid var(--color-border);
+    background: var(--color-surface);
+  }
+
+  &__sidebar {
+    display: grid;
+    align-content: start;
+    gap: var(--space);
+    padding: var(--space);
+  }
+
+  &__sidebar-header {
+    grid-template-columns: 1fr auto;
+    align-items: start;
+  }
+
+  &__sidebar-title,
+  &__account {
+    display: block;
+  }
+
+  &__repo-list {
+    max-height: calc(100vh - var(--space-xl) * 5);
+    overflow: auto;
+  }
+
+  &__repo,
+  &__project {
+    display: grid;
+    gap: var(--space-xs);
+    width: 100%;
+    padding: var(--space-s);
+    border: 0;
+    border-radius: var(--border-radius);
+    color: inherit;
+    text-align: left;
+    background: transparent;
+
+    &--active,
+    &:hover {
+      background: var(--color-accent-tint);
+    }
+  }
+
+  &__repo-name,
+  &__project-name,
+  &__card-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__projectbar {
+    align-content: start;
+    padding: var(--space);
+  }
+
+  &__section-head {
+    display: flex;
+    justify-content: space-between;
+    color: var(--color-muted);
+  }
+
+  &__board-shell {
+    display: grid;
+    grid-template-rows: auto auto auto 1fr;
+    min-width: 0;
+  }
+
+  &__toolbar,
+  &__filters {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space);
+    padding: var(--space);
+    border-bottom: var(--border-width) solid var(--color-border);
+    background: var(--color-surface);
+  }
+
+  &__toolbar-actions,
+  &__filters,
+  &__segments,
+  &__detail-meta,
+  &__card-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-s);
+  }
+
+  &__filters {
+    justify-content: flex-start;
+    overflow-x: auto;
+  }
+
+  &__search {
+    min-width: calc(var(--space-xl) * 6);
+  }
+
+  &__select {
+    width: auto;
+    min-width: calc(var(--space-xl) * 2.6);
+  }
+
+  &__segments {
+    padding: var(--space-xs);
+    border-radius: var(--border-radius);
+    background: color-mix(in srgb, var(--color-foreground), transparent 94%);
+  }
+
+  &__segment {
+    padding: var(--space-xs) var(--space-s);
+    background: transparent;
+
+    &--active {
+      background: var(--color-surface);
+      box-shadow: var(--shadow-s);
+    }
+  }
+
+  &__error,
+  &__saving,
+  &__empty {
+    margin: var(--space);
+    padding: var(--space);
+    border-radius: var(--border-radius);
+  }
+
+  &__saving {
+    color: var(--color-accent-dark);
+    background: var(--color-accent-tint);
+  }
+
+  &__error {
+    color: var(--color-accent-dark);
+    background: var(--color-accent-tint);
+  }
+
+  &__empty {
+    color: var(--color-muted);
+    background: var(--color-surface);
+  }
+
+  &__lanes {
+    display: grid;
+    grid-auto-columns: minmax(calc(var(--space-xl) * 4.4), calc(var(--space-xl) * 5.4));
+    grid-auto-flow: column;
+    gap: var(--space);
+    overflow-x: auto;
+    padding: var(--space);
+  }
+
+  &__lane {
+    display: grid;
+    align-content: start;
+    gap: var(--space-s);
+    padding: var(--space-s);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--border-radius-l);
+    background: color-mix(in srgb, var(--color-foreground), transparent 96%);
+  }
+
+  &__lane-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-s);
+  }
+
+  &__lane-dot {
+    width: var(--space-s);
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: var(--color-accent);
+  }
+
+  &__count {
+    margin-left: auto;
+    padding: var(--space-xs) var(--space-s);
+    border-radius: calc(var(--border-radius) * 4);
+    color: var(--color-accent-dark);
+    background: var(--color-accent-tint);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  &__card,
+  &__add-card,
+  &__row,
+  &__commit {
+    display: grid;
+    gap: var(--space-xs);
+    width: 100%;
+    padding: var(--space-s);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--border-radius);
+    color: inherit;
+    text-align: left;
+    text-decoration: none;
+    background: var(--color-surface);
+
+    &:hover {
+      background: var(--color-surface-raised);
+    }
+  }
+
+  &__add-card {
+    border-style: dashed;
+    color: var(--color-muted);
+    background: transparent;
+  }
+
+  &__list {
+    display: grid;
+    gap: var(--space);
+    padding: var(--space);
+    overflow: auto;
+  }
+
+  &__list-section {
+    padding: var(--space);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--border-radius-l);
+    background: var(--color-surface);
+  }
+
+  &__row {
+    grid-template-columns: 1fr auto;
+    align-items: center;
+  }
+
+  &__detail {
+    position: relative;
+    display: grid;
+    align-content: start;
+    gap: var(--space);
+    width: min(32vw, calc(var(--space-xl) * 8));
+    min-width: calc(var(--space-xl) * 6);
+    padding: var(--space);
+    border-right: 0;
+    border-left: var(--border-width) solid var(--color-border);
+  }
+
+  &__close {
+    position: absolute;
+    top: var(--space);
+    right: var(--space);
+    padding: var(--space-xs) var(--space-s);
+  }
+
+  &__detail-meta {
+    flex-wrap: wrap;
+    color: var(--color-muted);
+    font-size: var(--font-size-s);
+
+    .gitkanban-web__input {
+      width: calc(var(--space-xl) * 2.6);
+    }
+  }
+
+  &__markdown {
+    width: 100%;
+    min-height: calc(var(--space-xl) * 5);
+    max-height: calc(100vh - var(--space-xl) * 8);
+    overflow: auto;
+    padding: var(--space);
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--border-radius);
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-s);
+    line-height: var(--line-height-normal);
+    white-space: pre-wrap;
+    background: color-mix(in srgb, var(--color-foreground), transparent 96%);
+  }
+
+  &__detail-actions {
+    display: flex;
+    gap: var(--space-s);
+  }
+
+  &__commit {
+    font-size: var(--font-size-s);
+
+    small {
+      color: var(--color-muted);
+    }
+  }
+}
+
+@media (max-width: 900px) {
+  .gitkanban-web {
+    &__workspace {
+      grid-template-columns: 1fr;
+    }
+
+    &__sidebar,
+    &__projectbar,
+    &__detail {
+      border-right: 0;
+      border-bottom: var(--border-width) solid var(--color-border);
+    }
+
+    &__detail {
+      width: auto;
+      min-width: 0;
+      border-left: 0;
+    }
+
+    &__toolbar,
+    &__filters {
+      align-items: stretch;
+      flex-direction: column;
+    }
+  }
+}
