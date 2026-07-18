@@ -27,8 +27,19 @@ struct FilterBar: View {
         return Array(Set(fromConfig + fromCards)).sorted()
     }
 
+    private var epics: [Epic] {
+        let fromConfig = config?.epics ?? []
+        let ids = Set(fromConfig.map(\.id) + allCards.compactMap(\.fields.epic))
+        return fromConfig.filter { ids.contains($0.id) }
+            + ids.subtracting(fromConfig.map(\.id)).sorted().map { Epic(id: $0) }
+    }
+
     private func userName(_ id: String) -> String {
         config?.users.first { $0.id == id }?.name ?? id
+    }
+
+    private func epicName(_ id: String) -> String {
+        config?.epics.first { $0.id == id }?.name ?? id
     }
 
     var body: some View {
@@ -97,6 +108,25 @@ struct FilterBar: View {
                             model.filterType = type
                         } label: {
                             Label(type.capitalized, systemImage: TypeIcon.name(type))
+                        }
+                    }
+                }
+            }
+
+            if !epics.isEmpty {
+                filterMenu(
+                    title: "Epic",
+                    systemImage: "square.stack.3d.up",
+                    selection: model.filterEpic,
+                    selectedLabel: model.filterEpic.map(epicName)
+                ) {
+                    Button("Any epic") { model.filterEpic = nil }
+                    Divider()
+                    ForEach(epics, id: \.id) { epic in
+                        Button {
+                            model.filterEpic = epic.id
+                        } label: {
+                            Label(epic.name ?? epic.id, systemImage: "square.stack.3d.up")
                         }
                     }
                 }

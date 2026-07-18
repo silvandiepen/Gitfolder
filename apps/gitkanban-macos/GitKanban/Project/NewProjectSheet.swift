@@ -15,6 +15,8 @@ struct NewProjectSheet: View {
     @State private var laneItems: [EditableItem] = NewProjectSheet.defaultLaneItems()
     @State private var priorityItems: [EditableItem] = NewProjectSheet.defaultPriorityItems()
     @State private var assigneeItems: [EditableItem] = []
+    @State private var epicItems: [EditableItem] = []
+    @State private var epicOrigins: [UUID: Epic] = [:]
     @State private var seeded = false
     @State private var isSaving = false
     /// In create mode with several repos connected, which repo the project lands in.
@@ -79,6 +81,7 @@ struct NewProjectSheet: View {
                     laneSection
                     prioritySection
                     assigneeSection
+                    epicSection
                 }
                 .padding(24)
             }
@@ -245,6 +248,35 @@ struct NewProjectSheet: View {
         }
     }
 
+    private var epicSection: some View {
+        card {
+            sectionHeader("Epics (optional)",
+                          addTitle: "Add epic",
+                          onAdd: { epicItems.append(EditableItem(text: "")) },
+                          onReset: { epicItems = [] })
+            if epicItems.isEmpty {
+                Text("No epics yet.").font(.callout).foregroundStyle(.tertiary)
+                    .padding(.vertical, 4)
+            } else {
+                VStack(spacing: 8) {
+                    ForEach($epicItems) { $item in
+                        HStack(spacing: 10) {
+                            Image(systemName: "square.stack.3d.up.fill").foregroundStyle(.secondary)
+                            TextField("Epic name", text: $item.text).textFieldStyle(.plain)
+                            Spacer(minLength: 8)
+                            Button {
+                                epicItems.removeAll { $0.id == item.id }
+                            } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary) }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 9)
+                        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                }
+            }
+        }
+    }
+
     private var footer: some View {
         VStack(spacing: 0) {
             Divider()
@@ -364,8 +396,32 @@ struct NewProjectSheet: View {
             if let n = u.name { userNames[item.id] = n }
             return item
         }
+        epicItems = config.epics.map { epic in
+            let item = EditableItem(text: epic.name ?? epic.id)
+            epicOrigins[item.id] = epic
+            return item
+        }
         originalUserIDs = Set(config.users.map(\.id))
         originalTypes = config.types
+    }
+
+    /// Build the epic list, preserving existing epics' ids on rename and deriving a
+    /// unique slug id for newly-added ones.
+    private func builtEpics() -> [Epic] {
+        let kept = epicItems.compactMap { epicOrigins[$0.id] }
+        var used = Set(kept.map(\.id))
+        return epicItems.compactMap { item -> Epic? in
+            let label = item.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !label.isEmpty else { return nil }
+            if let orig = epicOrigins[item.id] {
+                return Epic(id: orig.id, name: label, description: orig.description, project: orig.project)
+            }
+            let base = laneSlug(label).isEmpty ? "epic" : laneSlug(label)
+            var id = base, n = 2
+            while used.contains(id) { id = "\(base)-\(n)"; n += 1 }
+            used.insert(id)
+            return Epic(id: id, name: label)
+        }
     }
 
     // MARK: Save
@@ -400,7 +456,8 @@ struct NewProjectSheet: View {
             description: description.trimmingCharacters(in: .whitespacesAndNewlines),
             lanes: lanes,
             priorities: priorities,
-            users: users
+            users: users,
+            epics: builtEpics()
         )
         if model.errorMessage == nil { dismiss() }
     }
@@ -476,6 +533,7 @@ struct NewProjectSheet: View {
                 priorities: priorities,
                 users: users,
                 types: originalTypes,
+                epics: builtEpics(),
                 unassign: unassign,
                 createFolders: createFolders,
                 migrations: migrations

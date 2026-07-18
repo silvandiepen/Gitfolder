@@ -73,19 +73,8 @@ struct WorkspaceView: View {
                 }
 
                 Divider()
-                HStack(spacing: 8) {
-                    NewProjectButton { model.isShowingNewProjectSheet = true }
-                    Spacer()
-                    Button {
-                        model.isShowingRepoPicker = true
-                    } label: {
-                        Label("Add Repository", systemImage: "plus.rectangle.on.folder")
-                            .font(.callout)
-                    }
-                    .buttonStyle(.borderless)
-                    .help("Connect another repository")
-                }
-                .padding(12)
+                NewProjectButton { model.isShowingNewProjectSheet = true }
+                    .padding(12)
             }
             .navigationSplitViewColumnWidth(min: 220, ideal: 260)
         } detail: {
@@ -95,8 +84,16 @@ struct WorkspaceView: View {
             ToolbarItem(placement: .navigation) {
                 if let repo = model.activeRepo {
                     Menu {
-                        Button("Add Repository…") { model.isShowingRepoPicker = true }
+                        ForEach(model.connectedRepos) { connected in
+                            Button {
+                                model.activate(connected, project: connected.workspace?.projects.first)
+                            } label: {
+                                Label(connected.repo.fullName,
+                                      systemImage: connected.repo.fullName == repo.fullName ? "checkmark" : "book.closed")
+                            }
+                        }
                         Divider()
+                        Button("Manage Repositories…") { model.isShowingRepoPicker = true }
                         Button("Sign Out") { model.signOut() }
                     } label: {
                         Text(repo.fullName)

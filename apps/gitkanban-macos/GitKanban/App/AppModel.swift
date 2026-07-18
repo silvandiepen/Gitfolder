@@ -82,18 +82,20 @@ final class AppModel {
     var filterAssignee: String?
     var filterPriority: String?
     var filterType: String?
+    var filterEpic: String?
     /// Whether the search sheet is shown.
     var isShowingSearch = false
     var searchText = ""
 
     var hasActiveFilters: Bool {
-        filterAssignee != nil || filterPriority != nil || filterType != nil
+        filterAssignee != nil || filterPriority != nil || filterType != nil || filterEpic != nil
     }
 
     func clearFilters() {
         filterAssignee = nil
         filterPriority = nil
         filterType = nil
+        filterEpic = nil
     }
 
     /// Whether a card passes the active board filters.
@@ -101,6 +103,7 @@ final class AppModel {
         if let filterAssignee, card.fields.assignee != filterAssignee { return false }
         if let filterPriority, card.fields.priority != filterPriority { return false }
         if let filterType, card.fields.type != filterType { return false }
+        if let filterEpic, card.fields.epic != filterEpic { return false }
         return true
     }
 
@@ -398,7 +401,8 @@ final class AppModel {
         description: String,
         lanes: [Lane],
         priorities: [Priority],
-        users: [User]
+        users: [User],
+        epics: [Epic] = []
     ) async {
         let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -433,7 +437,8 @@ final class AppModel {
                 description: description,
                 lanes: lanes,
                 priorities: priorities,
-                users: users
+                users: users,
+                epics: epics
             )
             try readmeText.write(
                 to: projectURL.appendingPathComponent("README.md"),
@@ -900,6 +905,7 @@ final class AppModel {
         priorities: [Priority],
         users: [User],
         types: [String],
+        epics: [Epic] = [],
         unassign: Set<String>,
         createFolders: [String] = [],
         migrations: [(from: String, toFolder: String, toStatus: String)] = []
@@ -911,7 +917,7 @@ final class AppModel {
         do {
             let readme = BoardStore.renderProjectReadme(
                 name: name, description: description, lanes: lanes,
-                priorities: priorities, users: users, types: types
+                priorities: priorities, users: users, types: types, epics: epics
             )
             try readme.write(to: projectURL.appendingPathComponent("README.md"), atomically: true, encoding: .utf8)
 
@@ -1180,6 +1186,7 @@ final class AppModel {
         lines = setFrontmatterKey(lines, "status", status.isEmpty ? nil : status)
         lines = setFrontmatterKey(lines, "priority", fields.priority)
         lines = setFrontmatterKey(lines, "type", fields.type.map(yamlScalar))
+        lines = setFrontmatterKey(lines, "epic", fields.epic.map(yamlScalar))
         lines = setFrontmatterKey(lines, "assignee", fields.assignee.map(yamlScalar))
         lines = setFrontmatterKey(lines, "order", fields.order)
 

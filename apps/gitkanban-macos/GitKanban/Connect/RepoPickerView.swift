@@ -32,7 +32,7 @@ struct RepoPickerView: View {
     private var header: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(isSheet ? "Add a repository" : "Choose a repository").font(.headline)
+                Text(isSheet ? "Manage repositories" : "Choose a repository").font(.headline)
                 if let login = model.login {
                     Text("Signed in as \(login)").font(.caption).foregroundStyle(.secondary)
                 }
@@ -55,10 +55,15 @@ struct RepoPickerView: View {
             spinner("\(model.syncStatus)")
         } else {
             List {
+                if isSheet, !model.connectedRepos.isEmpty {
+                    Section("Connected") {
+                        ForEach(model.connectedRepos) { connectedRow($0) }
+                    }
+                }
                 if let last = lastUsed {
                     Section("Last Used") { repoRow(last) }
                 }
-                Section(lastUsed != nil ? "All Repositories" : "Repositories") {
+                Section(isSheet ? "Add a Repository" : (lastUsed != nil ? "All Repositories" : "Repositories")) {
                     ForEach(reposToShow) { repoRow($0) }
                 }
             }
@@ -81,6 +86,24 @@ struct RepoPickerView: View {
     private var reposToShow: [GitHubRepo] {
         guard let last = lastUsed?.fullName else { return filtered }
         return filtered.filter { $0.fullName != last }
+    }
+
+    private func connectedRow(_ connected: ConnectedRepo) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: connected.repo.isPrivate ? "lock.fill" : "book.closed")
+                .foregroundStyle(.secondary).frame(width: 16)
+            Text(connected.repo.fullName)
+            Spacer()
+            Button {
+                model.disconnectRepo(connected)
+            } label: {
+                Label("Disconnect", systemImage: "minus.circle.fill")
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(.red)
+            }
+            .buttonStyle(.plain)
+            .help("Disconnect this repository")
+        }
     }
 
     private func repoRow(_ repo: GitHubRepo) -> some View {

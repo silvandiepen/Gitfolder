@@ -23,6 +23,7 @@ struct CardDetailView: View {
     @State private var editPriority = ""
     @State private var editType = ""
     @State private var editAssignee = ""
+    @State private var editEpic = ""
     @State private var editBody = ""
 
     private var editable: Bool { model.canEdit(card) }
@@ -31,6 +32,7 @@ struct CardDetailView: View {
     private var priorities: [Priority] { config?.priorities ?? [] }
     private var users: [User] { config?.users ?? [] }
     private var types: [String] { config?.types ?? [] }
+    private var epics: [Epic] { config?.epics ?? [] }
 
     private var title: String { card.fields.title.isEmpty ? card.fields.id : card.fields.title }
     private var currentLaneID: String { lanes.first { $0.status == card.fields.status }?.id ?? "" }
@@ -41,6 +43,7 @@ struct CardDetailView: View {
             || editPriority != (card.fields.priority ?? "")
             || editType != (card.fields.type ?? "")
             || editAssignee != (card.fields.assignee ?? "")
+            || editEpic != (card.fields.epic ?? "")
             || editBody != card.body
     }
 
@@ -94,6 +97,9 @@ struct CardDetailView: View {
             if let type = card.fields.type, !type.isEmpty {
                 chip(type, color: .secondary)
             }
+            if let epic = card.fields.epic, !epic.isEmpty {
+                chip(epics.first { $0.id == epic }?.name ?? epic, color: .purple)
+            }
             if let assignee = card.fields.assignee, !assignee.isEmpty {
                 Text("@\(assignee)").font(.caption).foregroundStyle(.secondary)
             }
@@ -145,6 +151,12 @@ struct CardDetailView: View {
                 field("Priority") { priorityControl }
                 field("Type") { typeControl }
             }
+            if !epics.isEmpty {
+                GridRow {
+                    field("Epic") { epicControl }
+                    Color.clear.frame(height: 0)
+                }
+            }
         }
         .disabled(!editable)
         .padding(16)
@@ -159,68 +171,140 @@ struct CardDetailView: View {
         }
     }
 
-    private var laneControl: some View {
-        Picker("", selection: $editLaneID) {
-            ForEach(Array(lanes.enumerated()), id: \.element.id) { index, lane in
-                HStack(spacing: 6) {
-                    Circle().fill(LaneColor.at(index)).frame(width: 8, height: 8)
-                    Text(lane.name)
+    /// A consistently-styled select: a pill showing a colour dot or icon + the current
+    /// value + a chevron, opening a native menu of options.
+    private func selectPill<Menu: View>(
+        value: String,
+        placeholder: String,
+        dot: Color? = nil,
+        icon: String? = nil,
+        @ViewBuilder menu: () -> Menu
+    ) -> some View {
+        SwiftUI.Menu {
+            menu()
+        } label: {
+            HStack(spacing: 7) {
+                if let dot {
+                    Circle().fill(dot).frame(width: 9, height: 9)
+                } else if let icon {
+                    Image(systemName: icon).font(.caption).foregroundStyle(.secondary).frame(width: 12)
                 }
-                .tag(lane.id)
+                Text(value.isEmpty ? placeholder : value)
+                    .foregroundStyle(value.isEmpty ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+                    .lineLimit(1)
+                Spacer(minLength: 6)
+                Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 7))
+            .overlay(RoundedRectangle(cornerRadius: 7).stroke(.quaternary.opacity(0.7), lineWidth: 1))
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden)
+    }
+
+    private var selectedLaneName: String {
+        lanes.first { $0.id == editLaneID }?.name ?? ""
+    }
+
+    private var laneControl: some View {
+        selectPill(value: selectedLaneName, placeholder: "Lane", dot: laneColor(editLaneID)) {
+            ForEach(Array(lanes.enumerated()), id: \.element.id) { index, lane in
+                Button {
+                    editLaneID = lane.id
+                } label: {
+                    Label(lane.name, systemImage: editLaneID == lane.id ? "checkmark" : "circle.fill")
+                        .foregroundStyle(editLaneID == lane.id ? AnyShapeStyle(.primary) : AnyShapeStyle(LaneColor.at(index)))
+                }
             }
         }
-        .pickerStyle(.menu).labelsHidden()
+    }
+
+    private var selectedPriorityName: String {
+        editPriority.isEmpty ? "" : (priorities.first { $0.id == editPriority }?.name ?? editPriority)
     }
 
     private var priorityControl: some View {
-        Picker("", selection: $editPriority) {
-            Text("None").tag("")
-            ForEach(Array(priorities.enumerated()), id: \.element.id) { _, priority in
-                HStack(spacing: 6) {
-                    Circle().fill(PriorityColor.color(for: priority.id, in: priorities) ?? .gray)
-                        .frame(width: 8, height: 8)
-                    Text(priority.name ?? priority.id)
+        selectPill(
+            value: selectedPriorityName,
+            placeholder: "None",
+            dot: editPriority.isEmpty ? nil : (PriorityColor.color(for: editPriority, in: priorities) ?? .gray)
+        ) {
+            Button {
+                editPriority = ""
+            } label: { Label("None", systemImage: editPriority.isEmpty ? "checkmark" : "circle") }
+            Divider()
+            ForEach(priorities, id: \.id) { priority in
+                Button {
+                    editPriority = priority.id
+                } label: {
+                    Label(priority.name ?? priority.id,
+                          systemImage: editPriority == priority.id ? "checkmark" : "flag.fill")
+                        .foregroundStyle(editPriority == priority.id ? AnyShapeStyle(.primary)
+                            : AnyShapeStyle(PriorityColor.color(for: priority.id, in: priorities) ?? .gray))
                 }
-                .tag(priority.id)
             }
         }
-        .pickerStyle(.menu).labelsHidden()
+    }
+
+    private var selectedAssigneeName: String {
+        editAssignee.isEmpty ? "" : (users.first { $0.id == editAssignee }?.name ?? editAssignee)
     }
 
     @ViewBuilder private var assigneeControl: some View {
         if users.isEmpty {
             TextField("username", text: $editAssignee).textFieldStyle(.roundedBorder)
         } else {
-            Picker("", selection: $editAssignee) {
-                Text("Unassigned").tag("")
-                ForEach(users, id: \.id) { Text($0.name ?? $0.id).tag($0.id) }
+            selectPill(value: selectedAssigneeName, placeholder: "Unassigned", icon: "person.crop.circle") {
+                Button {
+                    editAssignee = ""
+                } label: { Label("Unassigned", systemImage: editAssignee.isEmpty ? "checkmark" : "person.crop.circle.badge.xmark") }
+                Divider()
+                ForEach(users, id: \.id) { user in
+                    Button {
+                        editAssignee = user.id
+                    } label: {
+                        Label(user.name ?? user.id,
+                              systemImage: editAssignee == user.id ? "checkmark" : "person.crop.circle")
+                    }
+                }
             }
-            .pickerStyle(.menu).labelsHidden()
         }
     }
 
-    /// A select (menu) of the project's types that also allows a custom value.
+    /// A select of the project's types that also allows a custom value.
     private var typeControl: some View {
-        Menu {
+        selectPill(value: editType, placeholder: "None", icon: editType.isEmpty ? "tag" : TypeIcon.name(editType)) {
             ForEach(types, id: \.self) { type in
-                Button(type) { editType = type }
+                Button {
+                    editType = type
+                } label: { Label(type, systemImage: editType == type ? "checkmark" : TypeIcon.name(type)) }
             }
             if !types.isEmpty { Divider() }
             Button("Custom…") { promptCustomType() }
-            if !editType.isEmpty {
-                Button("Clear") { editType = "" }
-            }
-        } label: {
-            HStack {
-                Text(editType.isEmpty ? "None" : editType)
-                    .foregroundStyle(editType.isEmpty ? .secondary : .primary)
-                Spacer()
-                Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 8).padding(.vertical, 5)
-            .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 6))
+            if !editType.isEmpty { Button("Clear") { editType = "" } }
         }
-        .menuStyle(.borderlessButton)
+    }
+
+    private var selectedEpicName: String {
+        editEpic.isEmpty ? "" : (epics.first { $0.id == editEpic }?.name ?? editEpic)
+    }
+
+    private var epicControl: some View {
+        selectPill(value: selectedEpicName, placeholder: "None", icon: "square.stack.3d.up") {
+            Button {
+                editEpic = ""
+            } label: { Label("None", systemImage: editEpic.isEmpty ? "checkmark" : "circle") }
+            Divider()
+            ForEach(epics, id: \.id) { epic in
+                Button {
+                    editEpic = epic.id
+                } label: {
+                    Label(epic.name ?? epic.id,
+                          systemImage: editEpic == epic.id ? "checkmark" : "square.stack.3d.up")
+                }
+            }
+        }
     }
 
     private func promptCustomType() {
@@ -335,6 +419,7 @@ struct CardDetailView: View {
         editPriority = card.fields.priority ?? ""
         editType = card.fields.type ?? ""
         editAssignee = card.fields.assignee ?? ""
+        editEpic = card.fields.epic ?? ""
         editBody = card.body
     }
 
@@ -348,7 +433,7 @@ struct CardDetailView: View {
             status: lane.status,
             priority: nilIfEmpty(editPriority),
             type: nilIfEmpty(editType),
-            epic: card.fields.epic,
+            epic: nilIfEmpty(editEpic),
             assignee: nilIfEmpty(editAssignee),
             order: card.fields.order
         )

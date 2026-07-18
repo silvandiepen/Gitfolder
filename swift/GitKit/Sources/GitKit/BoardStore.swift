@@ -50,7 +50,8 @@ public enum BoardStore {
         lanes: [Lane],
         priorities: [Priority],
         users: [User],
-        types: [String] = []
+        types: [String] = [],
+        epics: [Epic] = []
     ) -> String {
         var lines: [String] = [
             "---",
@@ -96,6 +97,16 @@ public enum BoardStore {
 
         if !types.isEmpty {
             lines.append("types: [\(types.map { yamlScalar($0) }.joined(separator: ", "))]")
+        }
+
+        if !epics.isEmpty {
+            lines.append("epics:")
+            for epic in epics {
+                lines.append("  - id: \(yamlScalar(epic.id))")
+                if let name = epic.name { lines.append("    name: \(yamlScalar(name))") }
+                if let description = epic.description { lines.append("    description: \(yamlScalar(description))") }
+                if let project = epic.project { lines.append("    project: \(yamlScalar(project))") }
+            }
         }
 
         lines.append("---")
