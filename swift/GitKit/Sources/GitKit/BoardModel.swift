@@ -4,7 +4,7 @@ import Foundation
 /// is the source of truth; these types must stay in step with it. See
 /// `project-assets/Tasks/README.md` for the canonical contract.
 
-public struct Lane: Codable, Equatable, Sendable {
+public struct Lane: Codable, Equatable, Sendable, Identifiable {
     public var id: String
     public var name: String
     /// Directory name under the project (e.g. "1. To do"). Must exist on disk.

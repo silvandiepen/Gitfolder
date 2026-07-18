@@ -28,6 +28,9 @@ final class AppModel {
     var selectedCard: Card?
     var isCreatingProject = false
     var isShowingNewProjectSheet = false
+    /// When set, the New Task sheet is shown, pre-selecting this lane.
+    var newTaskLane: Lane?
+    var isCreatingTask = false
 
     // MARK: State — status
     var syncStatus = "Idle"
@@ -282,6 +285,89 @@ final class AppModel {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// Create a task (card) in the given lane of the current project: write a new
+    /// markdown card, commit, and push. Reloads the board on success.
+    func createTask(
+        title rawTitle: String,
+        lane: Lane,
+        priority: String?,
+        type: String?,
+        assignee: String?,
+        body: String
+    ) async {
+        let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let checkoutURL, let project = selectedProject else {
+            errorMessage = "Open a project before creating a task."
+            return
+        }
+        guard !title.isEmpty else { errorMessage = "A task needs a title."; return }
+        guard !lane.folder.isEmpty else { errorMessage = "Pick a lane for the task."; return }
+
+        isCreatingTask = true
+        errorMessage = nil
+        defer { isCreatingTask = false }
+
+        let laneURL = checkoutURL
+            .appendingPathComponent(project.folder, isDirectory: true)
+            .appendingPathComponent(lane.folder, isDirectory: true)
+        let fileName = uniqueCardFileName(for: title, in: laneURL)
+        let id = (fileName as NSString).deletingPathExtension
+
+        var front = "---\n"
+        front += "id: \(id)\n"
+        front += "title: \(yamlScalar(title))\n"
+        front += "project: \(yamlScalar(project.name))\n"
+        front += "status: \(lane.status)\n"
+        if let priority, !priority.isEmpty { front += "priority: \(priority)\n" }
+        if let type, !type.isEmpty { front += "type: \(yamlScalar(type))\n" }
+        if let assignee, !assignee.isEmpty { front += "assignee: \(yamlScalar(assignee))\n" }
+        front += "---\n\n"
+        let content = front + body.trimmingCharacters(in: .whitespacesAndNewlines) + "\n"
+
+        do {
+            try FileManager.default.createDirectory(at: laneURL, withIntermediateDirectories: true)
+            try content.write(to: laneURL.appendingPathComponent(fileName), atomically: true, encoding: .utf8)
+
+            let relative = "\(project.folder)/\(lane.folder)/\(fileName)"
+            syncStatus = "Creating task…"
+            if hasCommits(at: checkoutURL) {
+                _ = try? await git.pullRebase(at: checkoutURL, auth: auth)
+            }
+            try await git.commit(at: checkoutURL, message: "Add task \(id)", paths: [relative])
+            syncStatus = "Pushing…"
+            try await git.push(at: checkoutURL, auth: auth)
+            syncStatus = "Pushed"
+        } catch {
+            syncStatus = "Error"
+            errorMessage = error.localizedDescription
+        }
+
+        if let project = selectedProject { selectProject(project) }
+    }
+
+    private func uniqueCardFileName(for title: String, in laneURL: URL) -> String {
+        let base = slug(title).isEmpty ? "task" : slug(title)
+        var name = "\(base).md"
+        var n = 2
+        while FileManager.default.fileExists(atPath: laneURL.appendingPathComponent(name).path) {
+            name = "\(base)-\(n).md"; n += 1
+        }
+        return name
+    }
+
+    private func slug(_ s: String) -> String {
+        let mapped = s.lowercased().map { ($0.isLetter || $0.isNumber) ? $0 : "-" }
+        var result = String(mapped)
+        while result.contains("--") { result = result.replacingOccurrences(of: "--", with: "-") }
+        return result.trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+    }
+
+    private func yamlScalar(_ s: String) -> String {
+        if s.isEmpty { return "\"\"" }
+        let needsQuote = s.contains(":") || s.contains("#") || s.first == " " || s.last == " "
+        return needsQuote ? "\"\(s.replacingOccurrences(of: "\"", with: "\\\""))\"" : s
     }
 
     /// The default 5 lanes for a fresh project (To do → Done, with Done terminal).
