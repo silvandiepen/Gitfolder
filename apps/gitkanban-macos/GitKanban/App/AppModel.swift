@@ -647,6 +647,20 @@ final class AppModel {
         }
         destCards.insert(dragged, at: insertAt)
 
+        // Optimistic UI: apply the move/reorder in memory right away (git in bg).
+        var optimistic = board
+        optimistic.columns[dstColIdx].cards = destCards.map { existing in
+            guard existing.fields.id == cardID, !sameLane else { return existing }
+            var moved = existing
+            moved.fields.status = lane.status
+            return moved
+        }
+        if !sameLane {
+            optimistic.columns[srcColIdx].cards.removeAll { $0.fields.id == cardID }
+        }
+        draggingCardID = nil
+        self.board = optimistic
+
         let base = checkoutURL.appendingPathComponent(project.folder, isDirectory: true)
         let destDir = base.appendingPathComponent(lane.folder, isDirectory: true)
 
@@ -694,10 +708,10 @@ final class AppModel {
         } catch {
             syncStatus = "Error"
             errorMessage = error.localizedDescription
+            // Revert the optimistic change by reloading from disk.
+            if let project = selectedProject { selectProject(project) }
         }
-
         draggingCardID = nil
-        if let project = selectedProject { selectProject(project) }
     }
 
     /// Assign (or unassign, with a nil/empty value) several cards in one commit.

@@ -351,31 +351,77 @@ private struct ColumnView: View {
 /// lane and its immediate neighbours are wide, the rest narrow. Width (not height)
 /// spring-animates when the focused lane changes while scrolling.
 private struct LanesCarousel: View {
+    @Environment(AppModel.self) private var model
     let columns: [Column]
 
     private let base: CGFloat = 300
     private let spacing: CGFloat = 16
 
+    @State private var anchorID: String?
+    @State private var edgeDir = 0
+    @State private var scrollTask: Task<Void, Never>?
+
     var body: some View {
         GeometryReader { outer in
             let viewport = outer.size.width
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: spacing) {
-                    ForEach(columns) { column in
-                        ColumnView(column: column, width: base)
-                            .visualEffect { content, proxy in
-                                content.scaleEffect(
-                                    laneScale(frame: proxy.frame(in: .scrollView(axis: .horizontal)),
-                                              viewport: viewport),
-                                    anchor: .top
-                                )
-                            }
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: spacing) {
+                        ForEach(columns) { column in
+                            ColumnView(column: column, width: base)
+                                .id(column.id)
+                                .visualEffect { content, proxy in
+                                    content.scaleEffect(
+                                        laneScale(frame: proxy.frame(in: .scrollView(axis: .horizontal)),
+                                                  viewport: viewport),
+                                        anchor: .top
+                                    )
+                                }
+                        }
                     }
+                    .scrollTargetLayout()
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
+                .scrollPosition(id: $anchorID, anchor: .leading)
+                .overlay(alignment: .leading) { edgeZone(-1, proxy: proxy) }
+                .overlay(alignment: .trailing) { edgeZone(1, proxy: proxy) }
             }
         }
+    }
+
+    /// A thin drop zone at an edge that auto-scrolls the board while a card is
+    /// dragged over it (so you can drag a task across off-screen lanes).
+    private func edgeZone(_ dir: Int, proxy: ScrollViewProxy) -> some View {
+        Color.clear
+            .frame(width: 46).frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .allowsHitTesting(model.draggingCardID != nil)
+            .onDrop(of: [.text], isTargeted: Binding(
+                get: { edgeDir == dir },
+                set: { active in setEdge(active ? dir : 0, proxy: proxy) }
+            )) { _ in false }
+    }
+
+    private func setEdge(_ dir: Int, proxy: ScrollViewProxy) {
+        guard edgeDir != dir else { return }
+        edgeDir = dir
+        scrollTask?.cancel()
+        guard dir != 0 else { return }
+        scrollTask = Task { @MainActor in
+            while !Task.isCancelled && edgeDir == dir {
+                step(dir, proxy: proxy)
+                try? await Task.sleep(for: .milliseconds(180))
+            }
+        }
+    }
+
+    private func step(_ dir: Int, proxy: ScrollViewProxy) {
+        let ids = columns.map(\.id)
+        guard !ids.isEmpty else { return }
+        let current = anchorID.flatMap { ids.firstIndex(of: $0) } ?? (dir < 0 ? 0 : ids.count - 1)
+        let next = max(0, min(ids.count - 1, current + dir))
+        withAnimation(.easeInOut(duration: 0.18)) { proxy.scrollTo(ids[next], anchor: .leading) }
     }
 }
 
