@@ -776,6 +776,11 @@ final class AppModel {
         allCards.filter { $0.fields.assignee == userID }.count
     }
 
+    /// Number of cards currently in the lane with the given `status`.
+    func taskCount(inLaneStatus status: String) -> Int {
+        allCards.filter { $0.fields.status == status }.count
+    }
+
     /// Save edited project settings: rewrite the project's `README.md` config,
     /// unassign tasks of removed members, then commit + push and reload.
     func saveProjectSettings(
@@ -786,7 +791,9 @@ final class AppModel {
         priorities: [Priority],
         users: [User],
         types: [String],
-        unassign: Set<String>
+        unassign: Set<String>,
+        createFolders: [String] = [],
+        migrations: [(from: String, toFolder: String, toStatus: String)] = []
     ) async {
         guard let checkoutURL else { return }
         errorMessage = nil
@@ -797,6 +804,18 @@ final class AppModel {
                 priorities: priorities, users: users, types: types
             )
             try readme.write(to: projectURL.appendingPathComponent("README.md"), atomically: true, encoding: .utf8)
+
+            for folder in createFolders where !folder.isEmpty {
+                let dir = projectURL.appendingPathComponent(folder, isDirectory: true)
+                try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                let keep = dir.appendingPathComponent(".gitkeep")
+                if !FileManager.default.fileExists(atPath: keep.path) {
+                    try "".write(to: keep, atomically: true, encoding: .utf8)
+                }
+            }
+            for migration in migrations {
+                migrateLane(in: projectURL, from: migration.from, toFolder: migration.toFolder, toStatus: migration.toStatus)
+            }
             if !unassign.isEmpty { unassignTasks(in: projectURL, lanes: lanes, members: unassign) }
 
             syncStatus = "Saving settings…"
@@ -815,6 +834,24 @@ final class AppModel {
                 selectProject(updated)
             }
         } catch { errorMessage = error.localizedDescription }
+    }
+
+    /// Move every card out of a removed lane's folder into the target lane (updating
+    /// their status), then remove the now-empty folder.
+    private func migrateLane(in projectURL: URL, from: String, toFolder: String, toStatus: String) {
+        guard from != toFolder, !from.isEmpty else { return }
+        let fromDir = projectURL.appendingPathComponent(from, isDirectory: true)
+        let toDir = projectURL.appendingPathComponent(toFolder, isDirectory: true)
+        try? FileManager.default.createDirectory(at: toDir, withIntermediateDirectories: true)
+        let files = (try? FileManager.default.contentsOfDirectory(atPath: fromDir.path)) ?? []
+        for file in files where file.hasSuffix(".md") {
+            let src = fromDir.appendingPathComponent(file)
+            guard let content = try? String(contentsOf: src, encoding: .utf8) else { continue }
+            try? updatingStatus(in: content, to: toStatus).write(
+                to: toDir.appendingPathComponent(file), atomically: true, encoding: .utf8)
+            try? FileManager.default.removeItem(at: src)
+        }
+        try? FileManager.default.removeItem(at: fromDir)
     }
 
     /// Remove the `assignee` frontmatter line from any card assigned to a removed member.

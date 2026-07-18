@@ -129,11 +129,10 @@ struct WorkspaceView: View {
             }
         }
         .sheet(isPresented: $model.isShowingNewProjectSheet) {
-            NewProjectSheet(isPresented: $model.isShowingNewProjectSheet)
-                .environment(model)
+            NewProjectSheet().environment(model)
         }
         .sheet(item: $model.settingsProject) { project in
-            ProjectSettingsSheet(project: project).environment(model)
+            NewProjectSheet(editing: project).environment(model)
         }
     }
 

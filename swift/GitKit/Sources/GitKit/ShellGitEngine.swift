@@ -1,3 +1,6 @@
+// Depends on the subprocess-based `GitProcessRunner`, so it is macOS-only. iOS uses
+// the GitHub-API transport (git-pont) behind the same `GitEngine`-shaped boundary.
+#if os(macOS)
 import Foundation
 
 /// A `GitEngine` that shells out to the system `git` binary. This is the macOS
@@ -170,3 +173,4 @@ public struct ShellGitEngine: GitEngine {
         remote.isFileURL ? remote.path : remote.absoluteString
     }
 }
+#endif

@@ -1,3 +1,4 @@
+import AppKit
 import GitKit
 import SwiftUI
 
@@ -6,14 +7,25 @@ import SwiftUI
 /// and asks the model to write + commit + push the project.
 struct NewProjectSheet: View {
     @Environment(AppModel.self) private var model
-    @Binding var isPresented: Bool
+    @Environment(\.dismiss) private var dismiss
+    var editing: BoardProject? = nil
 
     @State private var name = ""
     @State private var description = ""
     @State private var laneItems: [EditableItem] = NewProjectSheet.defaultLaneItems()
     @State private var priorityItems: [EditableItem] = NewProjectSheet.defaultPriorityItems()
     @State private var assigneeItems: [EditableItem] = []
+    @State private var seeded = false
+    @State private var isSaving = false
+    @State private var laneOrigins: [UUID: Lane] = [:]
+    @State private var priorityNames: [UUID: String] = [:]
+    @State private var userNames: [UUID: String] = [:]
+    @State private var originalLanes: [Lane] = []
+    @State private var originalUserIDs: Set<String> = []
+    @State private var originalTypes: [String] = []
     @FocusState private var nameFocused: Bool
+
+    private var isEditing: Bool { editing != nil }
 
     /// A stable-identity wrapper so the lists can reorder/delete without SwiftUI
     /// losing track of the row a text field is bound to.
@@ -72,6 +84,7 @@ struct NewProjectSheet: View {
         }
         .frame(width: 620, height: 720)
         .background(.background)
+        .onAppear(perform: seedIfNeeded)
     }
 
     private var header: some View {
@@ -81,10 +94,10 @@ struct NewProjectSheet: View {
                     colors: [Color(red: 0.35, green: 0.42, blue: 0.98), Color(red: 0.55, green: 0.36, blue: 0.96)],
                     startPoint: .topLeading, endPoint: .bottomTrailing))
                 .frame(width: 46, height: 46)
-                .overlay(Image(systemName: "folder.fill").font(.title3).foregroundStyle(.white))
+                .overlay(Image(systemName: isEditing ? "gearshape.fill" : "folder.fill").font(.title3).foregroundStyle(.white))
             VStack(alignment: .leading, spacing: 2) {
-                Text("Create Project").font(.title2).fontWeight(.bold)
-                Text("Set up your project and configure the workflow.")
+                Text(isEditing ? "Project Settings" : "Create Project").font(.title2).fontWeight(.bold)
+                Text(isEditing ? "Edit this project’s workflow and members." : "Set up your project and configure the workflow.")
                     .font(.callout).foregroundStyle(.secondary)
             }
             Spacer()
@@ -228,20 +241,20 @@ struct NewProjectSheet: View {
             }
             HStack(spacing: 10) {
                 Spacer()
-                Button("Cancel") { isPresented = false }
+                Button("Cancel") { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Button {
-                    Task { await create() }
+                    save()
                 } label: {
-                    if model.isCreatingProject {
+                    if isSaving || model.isCreatingProject {
                         ProgressView().controlSize(.small)
                     } else {
-                        Text("Create Project")
+                        Text(isEditing ? "Save Changes" : "Create Project")
                     }
                 }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
-                .disabled(trimmedName.isEmpty || model.isCreatingProject)
+                .disabled(trimmedName.isEmpty || isSaving || model.isCreatingProject)
             }
             .padding(16)
         }
@@ -298,7 +311,56 @@ struct NewProjectSheet: View {
         .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
     }
 
-    // MARK: Create
+    // MARK: Seeding (edit mode)
+
+    /// In edit mode, fill the fields from the project's effective config once.
+    /// Lanes keep their original identity in `laneOrigins` so a rename never
+    /// renames the on-disk folder — only add/remove touch folders.
+    private func seedIfNeeded() {
+        guard !seeded else { return }
+        seeded = true
+        guard let editing else { return }
+
+        let config: EffectiveConfig
+        if model.selectedProject?.id == editing.id, let board = model.board {
+            config = board.config
+        } else {
+            config = resolveEffectiveConfig(model.workspace?.rootConfig ?? BoardConfig(), editing.config)
+        }
+
+        name = config.project ?? editing.name
+        description = ""
+
+        originalLanes = config.lanes
+        laneItems = config.lanes.map { lane in
+            let item = EditableItem(text: lane.name)
+            laneOrigins[item.id] = lane
+            return item
+        }
+        priorityItems = config.priorities.map { p in
+            let item = EditableItem(text: p.id)
+            if let n = p.name { priorityNames[item.id] = n }
+            return item
+        }
+        assigneeItems = config.users.map { u in
+            let item = EditableItem(text: u.id)
+            if let n = u.name { userNames[item.id] = n }
+            return item
+        }
+        originalUserIDs = Set(config.users.map(\.id))
+        originalTypes = config.types
+    }
+
+    // MARK: Save
+
+    private func save() {
+        guard !isSaving, !model.isCreatingProject else { return }
+        if isEditing {
+            saveEdits()
+        } else {
+            Task { await create() }
+        }
+    }
 
     private func create() async {
         let lanes = AppModel.lanes(fromNames: laneItems.map(\.text), terminalLast: true)
@@ -318,6 +380,95 @@ struct NewProjectSheet: View {
             priorities: priorities,
             users: users
         )
-        if model.errorMessage == nil { isPresented = false }
+        if model.errorMessage == nil { dismiss() }
+    }
+
+    private func saveEdits() {
+        guard let editing else { return }
+
+        // New lane list: existing lanes keep folder/status/identity (rename = name only);
+        // added lanes derive a folder from their name and get created on disk.
+        var newLanes: [Lane] = []
+        var createFolders: [String] = []
+        for item in laneItems {
+            let laneName = item.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !laneName.isEmpty else { continue }
+            if let orig = laneOrigins[item.id] {
+                newLanes.append(Lane(id: orig.id, name: laneName, folder: orig.folder,
+                                     status: orig.status, terminal: orig.terminal, backlog: orig.backlog))
+            } else {
+                let status = laneSlug(laneName)
+                let lane = Lane(id: status, name: laneName, folder: laneName, status: status)
+                newLanes.append(lane)
+                createFolders.append(lane.folder)
+            }
+        }
+        guard !newLanes.isEmpty else {
+            model.errorMessage = "A project needs at least one lane."
+            return
+        }
+
+        // Removed lanes: originals no longer present. Ones holding tickets ask where
+        // to move them; empty ones just have their folder removed.
+        let keptIDs = Set(newLanes.map(\.id))
+        var migrations: [(from: String, toFolder: String, toStatus: String)] = []
+        for lane in originalLanes where !keptIDs.contains(lane.id) {
+            let count = model.taskCount(inLaneStatus: lane.status)
+            if count > 0 {
+                guard let target = promptMoveTarget(from: lane, options: newLanes, count: count) else { return }
+                migrations.append((from: lane.folder, toFolder: target.folder, toStatus: target.status))
+            } else if let fallback = newLanes.first(where: { $0.folder != lane.folder }) {
+                migrations.append((from: lane.folder, toFolder: fallback.folder, toStatus: fallback.status))
+            }
+        }
+
+        let priorities = priorityItems.compactMap { item -> Priority? in
+            let id = item.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return id.isEmpty ? nil : Priority(id: id, name: priorityNames[item.id])
+        }
+        let users = assigneeItems.compactMap { item -> User? in
+            let id = item.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return id.isEmpty ? nil : User(id: id, name: userNames[item.id])
+        }
+        let unassign = originalUserIDs.subtracting(users.map(\.id))
+
+        isSaving = true
+        Task {
+            await model.saveProjectSettings(
+                project: editing,
+                name: trimmedName,
+                description: description.trimmingCharacters(in: .whitespacesAndNewlines),
+                lanes: newLanes,
+                priorities: priorities,
+                users: users,
+                types: originalTypes,
+                unassign: unassign,
+                createFolders: createFolders,
+                migrations: migrations
+            )
+            isSaving = false
+            if model.errorMessage == nil { dismiss() }
+        }
+    }
+
+    /// Ask which lane the tickets of a to-be-removed lane should move to.
+    private func promptMoveTarget(from lane: Lane, options: [Lane], count: Int) -> Lane? {
+        let alert = NSAlert()
+        alert.messageText = "Remove lane “\(lane.name)”?"
+        alert.informativeText = "\(count) task\(count == 1 ? "" : "s") are in this lane. Move them to:"
+        let popup = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 240, height: 26))
+        for option in options { popup.addItem(withTitle: option.name) }
+        alert.accessoryView = popup
+        alert.addButton(withTitle: "Move & Remove")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return nil }
+        let index = popup.indexOfSelectedItem
+        return index >= 0 && index < options.count ? options[index] : options.first
+    }
+
+    private func laneSlug(_ s: String) -> String {
+        let lowered = s.lowercased()
+        let mapped = lowered.map { $0.isLetter || $0.isNumber ? $0 : "-" }
+        return String(mapped).split(separator: "-").joined(separator: "-")
     }
 }

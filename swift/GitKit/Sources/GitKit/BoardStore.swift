@@ -209,6 +209,12 @@ public enum BoardStore {
         return (columns, uncategorised)
     }
 
+    /// Sort a single lane's cards into display order (order → priority → id). Shared
+    /// by the disk and remote loaders so a lane looks identical on every platform.
+    public static func sortedCards(_ cards: [Card], config: EffectiveConfig) -> [Card] {
+        cards.sorted { compare($0, $1, config: config) < 0 }
+    }
+
     private static func compare(_ a: Card, _ b: Card, config: EffectiveConfig) -> Int {
         if let oa = a.fields.order, let ob = b.fields.order, oa != ob {
             if let ia = Int(oa), let ib = Int(ob), ia != ib { return ia < ib ? -1 : 1 }

@@ -1,3 +1,6 @@
+// `Process` (subprocess execution) exists only on macOS, so the shell git runner is
+// compiled out on iOS. iOS uses the GitHub-API transport (git-pont) instead.
+#if os(macOS)
 import Foundation
 
 /// Result of running a `git` subprocess.
@@ -98,3 +101,4 @@ public struct GitProcessRunner: Sendable {
         return URL(fileURLWithPath: "/usr/bin/git")
     }
 }
+#endif
