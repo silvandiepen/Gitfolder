@@ -44,7 +44,17 @@ struct ProjectSettingsSheet: View {
                 }
                 if !config.priorities.isEmpty {
                     Section("Priorities") {
-                        ForEach(config.priorities, id: \.id) { LabeledContent($0.id, value: $0.name ?? "") }
+                        ForEach(config.priorities, id: \.id) { priority in
+                            HStack(spacing: 8) {
+                                Circle().fill(PriorityColor.color(for: priority.id, in: config.priorities) ?? .gray)
+                                    .frame(width: 9, height: 9)
+                                Text(priority.id)
+                                Spacer()
+                                if let name = priority.name, !name.isEmpty {
+                                    Text(name).font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
                     }
                 }
                 if !config.users.isEmpty {
