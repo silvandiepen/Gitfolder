@@ -11,6 +11,14 @@ struct GitKanbanApp: App {
                 .task { await model.restore() }
         }
         .commands {
+            CommandGroup(replacing: .newItem) {
+                Button("New Project…") {
+                    model.isShowingNewProjectSheet = true
+                }
+                .keyboardShortcut("n", modifiers: [.command])
+                .disabled(model.activeRepo == nil)
+            }
+
             CommandGroup(after: .newItem) {
                 Button("Refresh") {
                     Task { await model.refresh() }

@@ -3,6 +3,20 @@ import Foundation
 import GitKit
 import Observation
 
+/// How the board renders the selected project.
+enum BoardViewMode: String, CaseIterable, Identifiable {
+    case lanes
+    case list
+    var id: String { rawValue }
+}
+
+/// Where the backlog docks alongside the lanes.
+enum BacklogPlacement: String, CaseIterable, Identifiable {
+    case bottom
+    case right
+    var id: String { rawValue }
+}
+
 /// The single top-level model for GitKanban. Owns the GitHub connection, the
 /// app-managed repo checkout, and the loaded board. The app OWNS the checkout
 /// (it clones into its own Application Support container); it is not a folder viewer.
@@ -35,6 +49,38 @@ final class AppModel {
     var settingsProject: BoardProject?
     /// The card currently being dragged (hidden in its lane while dragging).
     var draggingCardID: String?
+    /// How the board is laid out: horizontal lanes (kanban) or a grouped list.
+    var boardViewMode: BoardViewMode = .lanes
+    /// Where the backlog docks relative to the lanes.
+    var backlogPlacement: BacklogPlacement = .bottom
+    /// Cards multi-selected via ⌘-click, for bulk actions from the context menu.
+    var selectedCardIDs: Set<String> = []
+
+    // MARK: State — filters + search
+    var filterAssignee: String?
+    var filterPriority: String?
+    var filterType: String?
+    /// Whether the search sheet is shown.
+    var isShowingSearch = false
+    var searchText = ""
+
+    var hasActiveFilters: Bool {
+        filterAssignee != nil || filterPriority != nil || filterType != nil
+    }
+
+    func clearFilters() {
+        filterAssignee = nil
+        filterPriority = nil
+        filterType = nil
+    }
+
+    /// Whether a card passes the active board filters.
+    func matchesFilters(_ card: Card) -> Bool {
+        if let filterAssignee, card.fields.assignee != filterAssignee { return false }
+        if let filterPriority, card.fields.priority != filterPriority { return false }
+        if let filterType, card.fields.type != filterType { return false }
+        return true
+    }
 
     // MARK: State — status
     var syncStatus = "Idle"
@@ -202,6 +248,8 @@ final class AppModel {
         guard let checkoutURL, let workspace else { return }
         selectedCard = nil
         draggingCardID = nil
+        selectedCardIDs.removeAll()
+        clearFilters()
         do {
             board = try BoardStore.loadProjectBoard(
                 root: checkoutURL,
@@ -468,6 +516,234 @@ final class AppModel {
         if let project = selectedProject { selectProject(project) }
     }
 
+    // MARK: - Multi-selection + bulk actions
+
+    /// Toggle a card in/out of the multi-selection (⌘-click).
+    func toggleSelection(_ id: String) {
+        if selectedCardIDs.contains(id) { selectedCardIDs.remove(id) } else { selectedCardIDs.insert(id) }
+    }
+
+    func clearSelection() { selectedCardIDs.removeAll() }
+
+    /// Move several cards into `lane` in a single commit: move each file, update its
+    /// `status` frontmatter, then commit + push once. Reloads the board.
+    func moveCards(ids: [String], to lane: Lane) async {
+        guard let checkoutURL, let project = selectedProject, let board else {
+            errorMessage = "Open a project before moving tasks."
+            return
+        }
+        guard !lane.folder.isEmpty else { return }
+        errorMessage = nil
+
+        let base = checkoutURL.appendingPathComponent(project.folder, isDirectory: true)
+        let targetDir = base.appendingPathComponent(lane.folder, isDirectory: true)
+        var paths: [String] = []
+        var moved = 0
+
+        do {
+            try FileManager.default.createDirectory(at: targetDir, withIntermediateDirectories: true)
+            for id in ids {
+                guard let column = board.columns.first(where: { c in c.cards.contains { $0.fields.id == id } }),
+                      let card = column.cards.first(where: { $0.fields.id == id }),
+                      let fileName = card.fileName else { continue }
+                let sourceLane = column.lane
+                guard sourceLane.id != lane.id else { continue }
+                let sourceURL = base.appendingPathComponent(sourceLane.folder).appendingPathComponent(fileName)
+                let targetURL = targetDir.appendingPathComponent(fileName)
+                let original = (try? String(contentsOf: sourceURL, encoding: .utf8)) ?? card.body
+                try updatingStatus(in: original, to: lane.status).write(to: targetURL, atomically: true, encoding: .utf8)
+                if targetURL.path != sourceURL.path { try? FileManager.default.removeItem(at: sourceURL) }
+                paths.append("\(project.folder)/\(sourceLane.folder)/\(fileName)")
+                paths.append("\(project.folder)/\(lane.folder)/\(fileName)")
+                moved += 1
+            }
+            guard moved > 0 else { clearSelection(); return }
+
+            syncStatus = "Moving…"
+            if hasCommits(at: checkoutURL) { _ = try? await git.pullRebase(at: checkoutURL, auth: auth) }
+            try await git.commit(at: checkoutURL, message: "Move \(moved) tasks to \(lane.name)", paths: paths)
+            syncStatus = "Pushing…"
+            try await git.push(at: checkoutURL, auth: auth)
+            syncStatus = "Pushed"
+        } catch {
+            syncStatus = "Error"
+            errorMessage = error.localizedDescription
+        }
+
+        clearSelection()
+        if let project = selectedProject { selectProject(project) }
+    }
+
+    /// Delete several cards in a single commit. Reloads the board.
+    func deleteCards(ids: [String]) async {
+        guard let checkoutURL, let project = selectedProject, let board else { return }
+        errorMessage = nil
+        var paths: [String] = []
+        for id in ids {
+            guard let column = board.columns.first(where: { c in c.cards.contains { $0.fields.id == id } }),
+                  let card = column.cards.first(where: { $0.fields.id == id }),
+                  let fileName = card.fileName else { continue }
+            let relative = "\(project.folder)/\(column.lane.folder)/\(fileName)"
+            try? FileManager.default.removeItem(at: checkoutURL.appendingPathComponent(relative))
+            paths.append(relative)
+        }
+        guard !paths.isEmpty else { clearSelection(); return }
+        do {
+            syncStatus = "Deleting…"
+            if hasCommits(at: checkoutURL) { _ = try? await git.pullRebase(at: checkoutURL, auth: auth) }
+            try await git.commit(at: checkoutURL, message: "Delete \(paths.count) tasks", paths: paths)
+            syncStatus = "Pushing…"
+            try await git.push(at: checkoutURL, auth: auth)
+            syncStatus = "Pushed"
+        } catch {
+            syncStatus = "Error"
+            errorMessage = error.localizedDescription
+        }
+        clearSelection()
+        if let project = selectedProject { selectProject(project) }
+    }
+
+    func toggleBacklogPlacement() {
+        backlogPlacement = backlogPlacement == .bottom ? .right : .bottom
+    }
+
+    // MARK: - Ordering + assignment
+
+    /// Move a card into `lane` positioned before `beforeCardID` (or at the end when
+    /// nil), rewriting the `order` frontmatter of every affected card so the new
+    /// arrangement persists. Handles both same-lane reordering and cross-lane moves
+    /// (updating `status` and renumbering the source lane) in a single commit.
+    func reorderCard(cardID: String, toLane lane: Lane, beforeCardID: String?) async {
+        guard let checkoutURL, let project = selectedProject, let board else { return }
+        guard !lane.folder.isEmpty else { return }
+        guard cardID != beforeCardID else { draggingCardID = nil; return }
+        guard let srcColIdx = board.columns.firstIndex(where: { $0.cards.contains { $0.fields.id == cardID } }),
+              let dstColIdx = board.columns.firstIndex(where: { $0.lane.id == lane.id }) else { return }
+        let sourceLane = board.columns[srcColIdx].lane
+        guard let dragged = board.columns[srcColIdx].cards.first(where: { $0.fields.id == cardID }),
+              dragged.fileName != nil else { return }
+        let sameLane = sourceLane.id == lane.id
+
+        // The destination lane's new order, with the dragged card inserted.
+        var destCards = board.columns[dstColIdx].cards
+        destCards.removeAll { $0.fields.id == cardID }
+        let insertAt: Int
+        if let beforeCardID, let idx = destCards.firstIndex(where: { $0.fields.id == beforeCardID }) {
+            insertAt = idx
+        } else {
+            insertAt = destCards.count
+        }
+        destCards.insert(dragged, at: insertAt)
+
+        let base = checkoutURL.appendingPathComponent(project.folder, isDirectory: true)
+        let destDir = base.appendingPathComponent(lane.folder, isDirectory: true)
+
+        errorMessage = nil
+        var paths: [String] = []
+        do {
+            try FileManager.default.createDirectory(at: destDir, withIntermediateDirectories: true)
+
+            for (index, card) in destCards.enumerated() {
+                guard let fileName = card.fileName else { continue }
+                let order = index + 1
+                let destURL = destDir.appendingPathComponent(fileName)
+
+                if card.fields.id == cardID && !sameLane {
+                    let srcURL = base.appendingPathComponent(sourceLane.folder).appendingPathComponent(fileName)
+                    let original = (try? String(contentsOf: srcURL, encoding: .utf8)) ?? card.body
+                    let composed = composeFrontmatter(original, ["status": lane.status, "order": "\(order)"])
+                    try composed.write(to: destURL, atomically: true, encoding: .utf8)
+                    if destURL.path != srcURL.path { try? FileManager.default.removeItem(at: srcURL) }
+                    paths.append("\(project.folder)/\(sourceLane.folder)/\(fileName)")
+                    paths.append("\(project.folder)/\(lane.folder)/\(fileName)")
+                } else {
+                    try applyFrontmatter(to: destURL, ["order": "\(order)"])
+                    paths.append("\(project.folder)/\(lane.folder)/\(fileName)")
+                }
+            }
+
+            if !sameLane {
+                let remaining = board.columns[srcColIdx].cards.filter { $0.fields.id != cardID }
+                for (index, card) in remaining.enumerated() {
+                    guard let fileName = card.fileName else { continue }
+                    let url = base.appendingPathComponent(sourceLane.folder).appendingPathComponent(fileName)
+                    try applyFrontmatter(to: url, ["order": "\(index + 1)"])
+                    paths.append("\(project.folder)/\(sourceLane.folder)/\(fileName)")
+                }
+            }
+
+            syncStatus = sameLane ? "Reordering…" : "Moving…"
+            if hasCommits(at: checkoutURL) { _ = try? await git.pullRebase(at: checkoutURL, auth: auth) }
+            let message = sameLane ? "Reorder \(cardID)" : "Move \(cardID) to \(lane.name)"
+            try await git.commit(at: checkoutURL, message: message, paths: Array(Set(paths)))
+            syncStatus = "Pushing…"
+            try await git.push(at: checkoutURL, auth: auth)
+            syncStatus = "Pushed"
+        } catch {
+            syncStatus = "Error"
+            errorMessage = error.localizedDescription
+        }
+
+        draggingCardID = nil
+        if let project = selectedProject { selectProject(project) }
+    }
+
+    /// Assign (or unassign, with a nil/empty value) several cards in one commit.
+    func assignCards(ids: [String], assignee: String?) async {
+        guard let checkoutURL, let project = selectedProject, let board else { return }
+        errorMessage = nil
+        let value = (assignee?.isEmpty == false) ? assignee : nil
+        var paths: [String] = []
+        for id in ids {
+            guard let column = board.columns.first(where: { c in c.cards.contains { $0.fields.id == id } }),
+                  let card = column.cards.first(where: { $0.fields.id == id }),
+                  let fileName = card.fileName else { continue }
+            let url = checkoutURL
+                .appendingPathComponent(project.folder, isDirectory: true)
+                .appendingPathComponent(column.lane.folder)
+                .appendingPathComponent(fileName)
+            try? applyFrontmatter(to: url, ["assignee": value])
+            paths.append("\(project.folder)/\(column.lane.folder)/\(fileName)")
+        }
+        guard !paths.isEmpty else { clearSelection(); return }
+        do {
+            syncStatus = "Assigning…"
+            if hasCommits(at: checkoutURL) { _ = try? await git.pullRebase(at: checkoutURL, auth: auth) }
+            let who = value ?? "no one"
+            try await git.commit(at: checkoutURL, message: "Assign \(paths.count) tasks to \(who)", paths: paths)
+            syncStatus = "Pushing…"
+            try await git.push(at: checkoutURL, auth: auth)
+            syncStatus = "Pushed"
+        } catch {
+            syncStatus = "Error"
+            errorMessage = error.localizedDescription
+        }
+        clearSelection()
+        if let project = selectedProject { selectProject(project) }
+    }
+
+    /// Update `updates` (nil removes a key) in a card file's frontmatter, preserving
+    /// its body and any other keys.
+    private func applyFrontmatter(to url: URL, _ updates: [String: String?]) throws {
+        let original = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        try composeFrontmatter(original, updates).write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    /// Return `original` with `updates` applied to its frontmatter (nil removes a key),
+    /// body untouched.
+    private func composeFrontmatter(_ original: String, _ updates: [String: String?]) -> String {
+        let (frontmatter, body) = BoardMarkdown.splitFrontmatter(original)
+        var lines = (frontmatter ?? "").components(separatedBy: "\n")
+        for (key, value) in updates {
+            lines = setFrontmatterKey(lines, key, value.flatMap { $0.isEmpty ? nil : $0 })
+        }
+        let fm = lines
+            .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            .joined(separator: "\n")
+        let trimmedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        return "---\n\(fm)\n---\n\n\(trimmedBody)\n"
+    }
+
     /// Reveal a project's folder in Finder.
     func revealInFinder(_ project: BoardProject) {
         guard let checkoutURL else { return }
@@ -557,6 +833,106 @@ final class AppModel {
         if let project = selectedProject {
             selectProject(project)
         }
+    }
+
+    /// Save structured field edits from the card editor: rewrite the file's
+    /// frontmatter (preserving any keys the editor doesn't model), replace the body,
+    /// and — if `targetLane` differs from the card's current lane — move the file into
+    /// the new lane's folder. Commits + pushes, then reloads the board.
+    func updateCard(_ card: Card, fields: CardFields, body: String, targetLane: Lane) async {
+        guard let checkoutURL, let project = selectedProject, let board else {
+            errorMessage = "Open a project before editing a task."
+            return
+        }
+        guard let fileName = card.fileName,
+              let column = board.columns.first(where: { col in
+                  col.cards.contains { $0.fields.id == card.fields.id }
+              }) else {
+            errorMessage = "This card has no file on disk to save to."
+            return
+        }
+        let sourceLane = column.lane
+        let base = checkoutURL.appendingPathComponent(project.folder, isDirectory: true)
+        let sourceURL = base.appendingPathComponent(sourceLane.folder).appendingPathComponent(fileName)
+
+        // Compose from the on-disk text so unmodelled frontmatter is preserved.
+        let original = (try? String(contentsOf: sourceURL, encoding: .utf8)) ?? card.body
+        let composed = composeCard(original: original, fields: fields, status: targetLane.status, body: body)
+
+        let moved = targetLane.id != sourceLane.id && !targetLane.folder.isEmpty
+        let targetDir = moved
+            ? base.appendingPathComponent(targetLane.folder, isDirectory: true)
+            : sourceURL.deletingLastPathComponent()
+        let targetURL = targetDir.appendingPathComponent(fileName)
+
+        let sourceRel = "\(project.folder)/\(sourceLane.folder)/\(fileName)"
+        let targetRel = "\(project.folder)/\(targetLane.folder)/\(fileName)"
+
+        errorMessage = nil
+        do {
+            try FileManager.default.createDirectory(at: targetDir, withIntermediateDirectories: true)
+            try composed.write(to: targetURL, atomically: true, encoding: .utf8)
+            if moved, targetURL.path != sourceURL.path {
+                try? FileManager.default.removeItem(at: sourceURL)
+            }
+
+            syncStatus = "Committing…"
+            if hasCommits(at: checkoutURL) { _ = try? await git.pullRebase(at: checkoutURL, auth: auth) }
+            let paths = moved ? [sourceRel, targetRel] : [sourceRel]
+            try await git.commit(at: checkoutURL, message: "Update \(card.fields.id)", paths: paths)
+            syncStatus = "Pushing…"
+            try await git.push(at: checkoutURL, auth: auth)
+            syncStatus = "Pushed"
+        } catch {
+            syncStatus = "Error"
+            errorMessage = error.localizedDescription
+        }
+
+        if let project = selectedProject { selectProject(project) }
+    }
+
+    /// Rebuild a card file from `original`, updating the modelled frontmatter keys
+    /// (leaving any others in place) and replacing the body. `status` comes from the
+    /// target lane, not `fields`, so a lane change is reflected in the frontmatter.
+    private func composeCard(original: String, fields: CardFields, status: String, body: String) -> String {
+        let (frontmatter, _) = BoardMarkdown.splitFrontmatter(original)
+        var lines = (frontmatter ?? "").components(separatedBy: "\n")
+
+        lines = setFrontmatterKey(lines, "id", fields.id.isEmpty ? nil : fields.id)
+        lines = setFrontmatterKey(lines, "title", fields.title.isEmpty ? nil : yamlScalar(fields.title))
+        lines = setFrontmatterKey(lines, "project", fields.project.isEmpty ? nil : yamlScalar(fields.project))
+        lines = setFrontmatterKey(lines, "status", status.isEmpty ? nil : status)
+        lines = setFrontmatterKey(lines, "priority", fields.priority)
+        lines = setFrontmatterKey(lines, "type", fields.type.map(yamlScalar))
+        lines = setFrontmatterKey(lines, "assignee", fields.assignee.map(yamlScalar))
+        lines = setFrontmatterKey(lines, "order", fields.order)
+
+        let fm = lines
+            .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            .joined(separator: "\n")
+        let trimmedBody = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        return "---\n\(fm)\n---\n\n\(trimmedBody)\n"
+    }
+
+    /// Replace the top-level `key:` line in `lines` with `key: value`, appending it
+    /// when absent. A nil/empty value removes the line. Nested (indented) keys are
+    /// left untouched.
+    private func setFrontmatterKey(_ lines: [String], _ key: String, _ value: String?) -> [String] {
+        var result = lines
+        let index = result.firstIndex { isTopLevelKeyLine($0, key) }
+        if let value, !value.isEmpty {
+            let line = "\(key): \(value)"
+            if let index { result[index] = line } else { result.append(line) }
+        } else if let index {
+            result.remove(at: index)
+        }
+        return result
+    }
+
+    private func isTopLevelKeyLine(_ line: String, _ key: String) -> Bool {
+        guard let first = line.first, !first.isWhitespace else { return false }
+        guard let colon = line.firstIndex(of: ":") else { return false }
+        return line[line.startIndex..<colon].trimmingCharacters(in: .whitespaces) == key
     }
 
     // MARK: - Helpers

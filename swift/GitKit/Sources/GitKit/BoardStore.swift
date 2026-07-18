@@ -37,6 +37,81 @@ public enum BoardStore {
         )
     }
 
+    // MARK: Config rendering (project README)
+
+    /// Render a full project `README.md`: a YAML frontmatter block (between `---`
+    /// fences) followed by `# <name>` and the description. The frontmatter always
+    /// carries `config: project` and `project:`, plus `lanes:`, `priorities:` and
+    /// `users:` arrays for whichever collections are non-empty. The output is
+    /// designed to parse back through `parseProjectConfig(yaml:)` unchanged.
+    public static func renderProjectReadme(
+        name: String,
+        description: String,
+        lanes: [Lane],
+        priorities: [Priority],
+        users: [User]
+    ) -> String {
+        var lines: [String] = [
+            "---",
+            "config: project",
+            "project: \(yamlScalar(name))",
+        ]
+
+        if !lanes.isEmpty {
+            lines.append("lanes:")
+            for lane in lanes {
+                lines.append("  - id: \(yamlScalar(lane.id))")
+                lines.append("    name: \(yamlScalar(lane.name))")
+                lines.append("    folder: \(yamlScalar(lane.folder))")
+                lines.append("    status: \(yamlScalar(lane.status))")
+                if lane.terminal == true {
+                    lines.append("    terminal: true")
+                }
+                if lane.backlog == true {
+                    lines.append("    backlog: true")
+                }
+            }
+        }
+
+        if !priorities.isEmpty {
+            lines.append("priorities:")
+            for priority in priorities {
+                lines.append("  - id: \(yamlScalar(priority.id))")
+                if let name = priority.name { lines.append("    name: \(yamlScalar(name))") }
+                if let description = priority.description { lines.append("    description: \(yamlScalar(description))") }
+            }
+        }
+
+        if !users.isEmpty {
+            lines.append("users:")
+            for user in users {
+                lines.append("  - id: \(yamlScalar(user.id))")
+                if let name = user.name { lines.append("    name: \(yamlScalar(name))") }
+                if let kind = user.kind { lines.append("    kind: \(yamlScalar(kind))") }
+                if let github = user.github { lines.append("    github: \(yamlScalar(github))") }
+                if let role = user.role { lines.append("    role: \(yamlScalar(role))") }
+            }
+        }
+
+        lines.append("---")
+        let frontmatter = lines.joined(separator: "\n")
+        return "\(frontmatter)\n\n# \(name)\n\n\(description)\n"
+    }
+
+    /// Render a YAML scalar, quoting when the value could be misparsed: empty
+    /// strings, or any value containing spaces, colons, dots or `#`, or one that
+    /// begins with a digit. Backslashes and quotes are escaped inside the quotes.
+    static func yamlScalar(_ value: String) -> String {
+        let needsQuote = value.isEmpty
+            || value.contains(where: { $0 == " " || $0 == ":" || $0 == "." || $0 == "#" || $0 == "\"" || $0 == "'" })
+            || (value.first?.isNumber ?? false)
+        guard needsQuote else { return value }
+        let escaped = value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        return "\"\(escaped)\""
+    }
+
     // MARK: Card parsing
 
     /// Parse a single card's text into a display `Card`, honouring the field source.
@@ -130,7 +205,10 @@ public enum BoardStore {
     }
 
     private static func compare(_ a: Card, _ b: Card, config: EffectiveConfig) -> Int {
-        if let oa = a.fields.order, let ob = b.fields.order, oa != ob { return oa < ob ? -1 : 1 }
+        if let oa = a.fields.order, let ob = b.fields.order, oa != ob {
+            if let ia = Int(oa), let ib = Int(ob), ia != ib { return ia < ib ? -1 : 1 }
+            if Int(oa) == nil || Int(ob) == nil { return oa < ob ? -1 : 1 }
+        }
         let pa = priorityRank(a.fields.priority, config)
         let pb = priorityRank(b.fields.priority, config)
         if pa != pb { return pa - pb }
@@ -163,7 +241,8 @@ public enum BoardStore {
                 name: item["name"] as? String ?? id,
                 folder: item["folder"] as? String ?? "",
                 status: status,
-                terminal: item["terminal"] as? Bool
+                terminal: item["terminal"] as? Bool,
+                backlog: item["backlog"] as? Bool
             )
         }
     }

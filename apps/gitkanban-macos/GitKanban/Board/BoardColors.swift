@@ -1,3 +1,4 @@
+import GitKit
 import SwiftUI
 
 /// Shared lane/priority colours. Index-based for now (lane order = colour); this
@@ -15,5 +16,28 @@ enum LaneColor {
 
     static func at(_ index: Int) -> Color {
         palette[((index % palette.count) + palette.count) % palette.count]
+    }
+
+    /// The colour of the lane holding `status` in `lanes` (by index), or gray.
+    static func forStatus(_ status: String, in lanes: [Lane]) -> Color {
+        guard let index = lanes.firstIndex(where: { $0.status == status }) else { return .gray }
+        return at(index)
+    }
+}
+
+/// Priority colours, ranked hot→cool by the priority's position in the config
+/// (first priority = most urgent = red). Unknown priorities fall back to gray.
+enum PriorityColor {
+    private static let ramp: [Color] = [
+        Color(red: 0.90, green: 0.26, blue: 0.21), // rank 0 — red
+        Color(red: 0.96, green: 0.55, blue: 0.09), // rank 1 — orange
+        Color(red: 0.23, green: 0.51, blue: 0.96), // rank 2 — blue
+        Color(red: 0.45, green: 0.50, blue: 0.58), // rank 3+ — slate
+    ]
+
+    static func color(for id: String?, in priorities: [Priority]) -> Color? {
+        guard let id, !id.isEmpty else { return nil }
+        guard let rank = priorities.firstIndex(where: { $0.id == id }) else { return .gray }
+        return ramp[min(rank, ramp.count - 1)]
     }
 }

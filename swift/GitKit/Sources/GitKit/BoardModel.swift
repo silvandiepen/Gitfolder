@@ -12,13 +12,23 @@ public struct Lane: Codable, Equatable, Sendable, Identifiable {
     /// The card `status` value this lane holds.
     public var status: String
     public var terminal: Bool?
+    /// A backlog lane holds not-yet-scheduled work; it renders apart from the
+    /// pipeline lanes (below the board, not as a pipeline column).
+    public var backlog: Bool?
 
-    public init(id: String, name: String, folder: String, status: String, terminal: Bool? = nil) {
+    public init(id: String, name: String, folder: String, status: String, terminal: Bool? = nil, backlog: Bool? = nil) {
         self.id = id
         self.name = name
         self.folder = folder
         self.status = status
         self.terminal = terminal
+        self.backlog = backlog
+    }
+
+    /// Whether this lane is a backlog: either flagged `backlog: true` in config, or
+    /// named `backlog` by convention (id or status).
+    public var isBacklog: Bool {
+        backlog == true || status == "backlog" || id == "backlog"
     }
 }
 
