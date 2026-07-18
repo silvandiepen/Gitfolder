@@ -73,7 +73,12 @@ struct FilterBar: View {
                     Button("Any priority") { model.filterPriority = nil }
                     Divider()
                     ForEach(priorities, id: \.id) { priority in
-                        Button(priority.name ?? priority.id) { model.filterPriority = priority.id }
+                        Button {
+                            model.filterPriority = priority.id
+                        } label: {
+                            Label(priority.name ?? priority.id, systemImage: "flag.fill")
+                                .foregroundStyle(PriorityColor.color(for: priority.id, in: priorities) ?? .gray)
+                        }
                     }
                 }
             }
@@ -88,7 +93,11 @@ struct FilterBar: View {
                     Button("Any type") { model.filterType = nil }
                     Divider()
                     ForEach(types, id: \.self) { type in
-                        Button(type) { model.filterType = type }
+                        Button {
+                            model.filterType = type
+                        } label: {
+                            Label(type.capitalized, systemImage: TypeIcon.name(type))
+                        }
                     }
                 }
             }

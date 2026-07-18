@@ -41,3 +41,23 @@ enum PriorityColor {
         return ramp[min(rank, ramp.count - 1)]
     }
 }
+
+/// SF Symbol for a task type (feature/bug/…); falls back to a tag.
+enum TypeIcon {
+    static func name(_ type: String) -> String {
+        switch type.lowercased() {
+        case "feature": return "star"
+        case "bug", "defect": return "ant"
+        case "enhancement", "improvement": return "sparkles"
+        case "chore": return "wrench.and.screwdriver"
+        case "task": return "checkmark.circle"
+        case "docs", "documentation": return "doc.text"
+        case "design": return "paintbrush"
+        case "refactor": return "arrow.triangle.2.circlepath"
+        case "test", "testing": return "checklist"
+        case "release": return "shippingbox"
+        case "spike", "research": return "magnifyingglass"
+        default: return "tag"
+        }
+    }
+}

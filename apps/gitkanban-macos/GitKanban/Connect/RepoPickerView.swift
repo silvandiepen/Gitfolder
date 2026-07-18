@@ -42,20 +42,11 @@ struct RepoPickerView: View {
             spinner("\(model.syncStatus)")
         } else {
             List {
-                ForEach(filtered) { repo in
-                    Button {
-                        Task { await model.openRepo(repo) }
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: repo.isPrivate ? "lock.fill" : "book.closed")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 16)
-                            Text(repo.fullName)
-                            Spacer()
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
+                if search.isEmpty, let last = model.lastUsedRepo {
+                    Section("Last Used") { repoRow(last) }
+                }
+                Section(search.isEmpty && model.lastUsedRepo != nil ? "All Repositories" : "Repositories") {
+                    ForEach(reposToShow) { repoRow($0) }
                 }
             }
             .searchable(text: $search, placement: .toolbar, prompt: "Filter repositories")
@@ -65,6 +56,27 @@ struct RepoPickerView: View {
                 }
             }
         }
+    }
+
+    private var reposToShow: [GitHubRepo] {
+        guard search.isEmpty, let last = model.lastUsedRepo?.fullName else { return filtered }
+        return filtered.filter { $0.fullName != last }
+    }
+
+    private func repoRow(_ repo: GitHubRepo) -> some View {
+        Button {
+            Task { await model.openRepo(repo) }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: repo.isPrivate ? "lock.fill" : "book.closed")
+                    .foregroundStyle(.secondary)
+                    .frame(width: 16)
+                Text(repo.fullName)
+                Spacer()
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func spinner(_ label: String) -> some View {

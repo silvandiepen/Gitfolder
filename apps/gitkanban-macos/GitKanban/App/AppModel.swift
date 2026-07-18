@@ -110,6 +110,9 @@ final class AppModel {
     /// Every card on the current board (all lanes + uncategorised).
     var allCards: [Card] { (board?.columns.flatMap(\.cards) ?? []) + (board?.uncategorised ?? []) }
 
+    /// The last-opened repository, if any (shown at the top of the repo picker).
+    var lastUsedRepo: GitHubRepo? { loadLastRepo() }
+
     // MARK: - Lifecycle
 
     /// Load a stored token from the keychain and, if present, restore the session.
