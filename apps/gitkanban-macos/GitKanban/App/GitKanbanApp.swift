@@ -30,5 +30,13 @@ struct GitKanbanApp: App {
                     .disabled(!model.isConnected)
             }
         }
+
+        // The task detail opens as its own resizable, movable window.
+        WindowGroup(id: "task-detail", for: String.self) { $cardID in
+            TaskDetailWindow(cardID: cardID ?? "")
+                .environment(model)
+        }
+        .defaultSize(width: 720, height: 680)
+        .windowResizability(.contentMinSize)
     }
 }

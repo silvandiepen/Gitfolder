@@ -107,6 +107,9 @@ final class AppModel {
     var isConnected: Bool { token != nil }
     var auth: GitAuth { .httpsToken(username: login ?? "x-access-token", token: token ?? "") }
 
+    /// Every card on the current board (all lanes + uncategorised).
+    var allCards: [Card] { (board?.columns.flatMap(\.cards) ?? []) + (board?.uncategorised ?? []) }
+
     // MARK: - Lifecycle
 
     /// Load a stored token from the keychain and, if present, restore the session.

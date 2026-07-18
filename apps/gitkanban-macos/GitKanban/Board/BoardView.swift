@@ -8,6 +8,7 @@ import UniformTypeIdentifiers
 /// list). Cards can be reordered and moved between lanes by dragging.
 struct BoardView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openWindow) private var openWindow
     @Binding var showNewProject: Bool
 
     private var hasProjects: Bool { !(model.workspace?.projects.isEmpty ?? true) }
@@ -65,8 +66,11 @@ struct BoardView: View {
             }
         }
         .animation(.snappy(duration: 0.2), value: model.selectedCardIDs)
-        .sheet(item: $model.selectedCard) { card in
-            CardDetailView(card: card).environment(model)
+        .onChange(of: model.selectedCard) { _, card in
+            if let card {
+                openWindow(id: "task-detail", value: card.fields.id)
+                model.selectedCard = nil
+            }
         }
         .sheet(item: $model.newTaskLane) { lane in
             NewTaskSheet(lane: lane).environment(model)
