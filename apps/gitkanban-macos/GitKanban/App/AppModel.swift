@@ -52,6 +52,8 @@ final class AppModel {
     var settingsProject: BoardProject?
     /// The card currently being dragged (hidden in its lane while dragging).
     var draggingCardID: String?
+    /// The lane clicked/selected on the board (press N to add a task to it).
+    var selectedLaneID: String?
     /// How the board is laid out: horizontal lanes (kanban) or a grouped list.
     var boardViewMode: BoardViewMode = .lanes
     /// Where the backlog docks relative to the lanes.

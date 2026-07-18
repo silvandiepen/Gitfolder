@@ -72,6 +72,18 @@ struct BoardView: View {
                 model.selectedCard = nil
             }
         }
+        .background {
+            // Press N (with a lane selected) to add a task to that lane.
+            Button("") {
+                if let id = model.selectedLaneID,
+                   let lane = model.board?.config.lanes.first(where: { $0.id == id }) {
+                    model.newTaskLane = lane
+                }
+            }
+            .keyboardShortcut(KeyEquivalent("n"), modifiers: [])
+            .opacity(0)
+            .accessibilityHidden(true)
+        }
         .sheet(item: $model.newTaskLane) { lane in
             NewTaskSheet(lane: lane).environment(model)
         }
@@ -247,16 +259,20 @@ private func assignMenu(targets: [String], users: [User], model: AppModel) -> so
     }
 }
 
-/// Route a tap: ⌘-click toggles the card's multi-selection; a plain click clears any
-/// selection and opens the card's detail sheet.
+/// Single click selects (⌘-click toggles multi-selection); it does not open.
 @MainActor
-private func handleCardTap(_ card: Card, model: AppModel) {
+private func handleCardSelect(_ card: Card, model: AppModel) {
     if NSEvent.modifierFlags.contains(.command) {
         model.toggleSelection(card.fields.id)
     } else {
-        model.clearSelection()
-        model.selectedCard = card
+        model.selectedCardIDs = [card.fields.id]
     }
+}
+
+/// Double click opens the card's detail window.
+@MainActor
+private func handleCardOpen(_ card: Card, model: AppModel) {
+    model.selectedCard = card
 }
 
 /// Load a dragged card id from a drop and hand it to `action`.
@@ -279,6 +295,7 @@ private struct ColumnView: View {
 
     private var isLane: Bool { !column.lane.folder.isEmpty }
     private var laneColor: Color { resolveLaneColor(column.lane, config: model.board?.config) }
+    private var isSelected: Bool { model.selectedLaneID == column.lane.id }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -316,9 +333,11 @@ private struct ColumnView: View {
         .background(isDropTargeted ? AnyShapeStyle(laneColor.opacity(0.14)) : AnyShapeStyle(.quaternary.opacity(0.4)), in: RoundedRectangle(cornerRadius: 14))
         .overlay(
             RoundedRectangle(cornerRadius: 14)
-                .stroke(isDropTargeted ? laneColor : laneColor.opacity(0.30),
-                        lineWidth: isDropTargeted ? 2 : 1)
+                .stroke(isDropTargeted ? laneColor : (isSelected ? laneColor.opacity(0.85) : laneColor.opacity(0.30)),
+                        lineWidth: (isDropTargeted || isSelected) ? 2 : 1)
         )
+        .contentShape(RoundedRectangle(cornerRadius: 14))
+        .onTapGesture { if isLane { model.selectedLaneID = column.lane.id } }
         .onDrop(of: [.text], isTargeted: $isDropTargeted) { providers in
             guard isLane else { return false }
             return handleCardDrop(providers) { id in
@@ -583,7 +602,8 @@ private struct CardRow: View {
         }
         .contentShape(Rectangle())
         .opacity(model.draggingCardID == card.fields.id ? 0.3 : 1)
-        .onTapGesture { handleCardTap(card, model: model) }
+        .onTapGesture(count: 2) { handleCardOpen(card, model: model) }
+        .onTapGesture(count: 1) { handleCardSelect(card, model: model) }
         .onDrag {
             model.draggingCardID = card.fields.id
             return NSItemProvider(object: card.fields.id as NSString)
@@ -653,7 +673,8 @@ private struct CardCell: View {
         )
         .contentShape(Rectangle())
         .opacity(model.draggingCardID == card.fields.id ? 0.3 : 1)
-        .onTapGesture { handleCardTap(card, model: model) }
+        .onTapGesture(count: 2) { handleCardOpen(card, model: model) }
+        .onTapGesture(count: 1) { handleCardSelect(card, model: model) }
         .onDrag {
             model.draggingCardID = card.fields.id
             return NSItemProvider(object: card.fields.id as NSString)
