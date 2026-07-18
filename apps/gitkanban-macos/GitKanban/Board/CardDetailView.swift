@@ -53,17 +53,14 @@ struct CardDetailView: View {
         VStack(spacing: 0) {
             header
             Divider()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    fieldsCard
-                    descriptionSection
-                }
-                .padding(20)
-            }
+            fieldsCard.padding(16)
+            Divider()
+            descriptionSection.frame(maxWidth: .infinity, maxHeight: .infinity)
             Divider()
             footer
         }
         .frame(minWidth: 560, minHeight: 460)
+        .toolbar { ToolbarItem(placement: .primaryAction) { actionsMenu } }
         .onAppear(perform: seedIfNeeded)
         .sheet(isPresented: $showMarkdown) { markdownSheet }
         .sheet(isPresented: $showHistory) { TaskHistorySheet(card: card).environment(model) }
@@ -78,17 +75,6 @@ struct CardDetailView: View {
                 metadata
             }
             Spacer(minLength: 12)
-            HStack(spacing: 10) {
-                actionsMenu
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "xmark").font(.system(size: 12, weight: .semibold))
-                }
-                .buttonStyle(.plain)
-                .help("Close")
-                .keyboardShortcut(.cancelAction)
-            }
         }
         .padding(16)
     }
@@ -213,27 +199,48 @@ struct CardDetailView: View {
         }
     }
 
-    /// A select that also allows a custom value.
+    /// A select (menu) of the project's types that also allows a custom value.
     private var typeControl: some View {
-        HStack(spacing: 6) {
-            TextField("type", text: $editType).textFieldStyle(.roundedBorder)
-            if !types.isEmpty {
-                Menu {
-                    ForEach(types, id: \.self) { type in
-                        Button(type) { editType = type }
-                    }
-                } label: {
-                    Image(systemName: "chevron.down").font(.caption)
-                }
-                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        Menu {
+            ForEach(types, id: \.self) { type in
+                Button(type) { editType = type }
             }
+            if !types.isEmpty { Divider() }
+            Button("Custom…") { promptCustomType() }
+            if !editType.isEmpty {
+                Button("Clear") { editType = "" }
+            }
+        } label: {
+            HStack {
+                Text(editType.isEmpty ? "None" : editType)
+                    .foregroundStyle(editType.isEmpty ? .secondary : .primary)
+                Spacer()
+                Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 8).padding(.vertical, 5)
+            .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 6))
+        }
+        .menuStyle(.borderlessButton)
+    }
+
+    private func promptCustomType() {
+        let alert = NSAlert()
+        alert.messageText = "Custom Type"
+        alert.informativeText = "Enter a type for this task."
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 220, height: 24))
+        field.stringValue = editType
+        alert.accessoryView = field
+        alert.addButton(withTitle: "Set")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn {
+            editType = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         }
     }
 
     // MARK: Description
 
     private var descriptionSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("Description").font(.headline)
                 Spacer()
@@ -246,17 +253,17 @@ struct CardDetailView: View {
                     .buttonStyle(.plain).foregroundStyle(.secondary)
                 }
             }
+            .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 8)
+
             if editingDesc {
                 TextEditor(text: $editBody)
                     .font(.system(.body, design: .monospaced))
                     .textEditorStyle(.plain)
-                    .frame(minHeight: 240)
-                    .padding(10)
-                    .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 10))
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 MarkdownWebView(markdown: editBody)
-                    .frame(minHeight: 240)
-                    .background(.quaternary.opacity(0.15), in: RoundedRectangle(cornerRadius: 10))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
     }
