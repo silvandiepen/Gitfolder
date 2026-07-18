@@ -26,6 +26,8 @@ final class AppModel {
     var selectedProject: BoardProject?
     var board: LoadedBoard?
     var selectedCard: Card?
+    var isCreatingProject = false
+    var isShowingNewProjectSheet = false
 
     // MARK: State — status
     var syncStatus = "Idle"
@@ -42,6 +44,8 @@ final class AppModel {
     @ObservationIgnored private let reposService = GitHubReposService()
     @ObservationIgnored private let git = ShellGitEngine()
     @ObservationIgnored private let runner = GitProcessRunner()
+    @ObservationIgnored private let defaults = UserDefaults.standard
+    @ObservationIgnored private let lastRepoKey = "lastOpenedRepoFullName"
 
     // MARK: Computed
     var isConnected: Bool { token != nil }
@@ -57,6 +61,11 @@ final class AppModel {
             token = stored
             login = try? await oauth.loadViewerLogin(token: stored)
             await loadRepos()
+            // Re-open last session's repository (persisted in full, so it works
+            // even for repos beyond the first page of the list).
+            if let repo = loadLastRepo() ?? lastCheckoutRepo() {
+                await openRepo(repo)
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -90,6 +99,7 @@ final class AppModel {
     /// Clear the token and all session state.
     func signOut() {
         try? keychain.delete()
+        defaults.removeObject(forKey: lastRepoKey)
         token = nil
         login = nil
         deviceAuth = nil
@@ -126,14 +136,19 @@ final class AppModel {
     /// project.
     func openRepo(_ repo: GitHubRepo) async {
         activeRepo = repo
+        persistLastRepo(repo)
         errorMessage = nil
         selectedCard = nil
         do {
             let dir = try checkoutDirectory(for: repo)
             let gitDir = dir.appendingPathComponent(".git")
             if FileManager.default.fileExists(atPath: gitDir.path) {
-                syncStatus = "Pulling…"
-                _ = try await git.pullRebase(at: dir, auth: auth)
+                // Only pull when the repo actually has commits — pulling an
+                // unborn branch fails.
+                if hasCommits(at: dir) {
+                    syncStatus = "Pulling…"
+                    _ = try await git.pullRebase(at: dir, auth: auth)
+                }
             } else {
                 syncStatus = "Cloning…"
                 try await git.clone(repo.cloneURL, to: dir, auth: auth)
@@ -162,6 +177,7 @@ final class AppModel {
 
     /// Leave the active board and return to the repo picker.
     func closeRepo() {
+        defaults.removeObject(forKey: lastRepoKey)
         activeRepo = nil
         checkoutURL = nil
         workspace = nil
@@ -185,6 +201,115 @@ final class AppModel {
             selectedProject = project
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Create a new project folder in the checkout: writes its `README.md`
+    /// (frontmatter config + body), seeds each lane folder with a `.gitkeep`, then
+    /// commits and pushes exactly like `saveCard`. Reloads the workspace and selects
+    /// the new project on success.
+    func createProject(
+        name rawName: String,
+        description: String,
+        lanes: [Lane],
+        priorities: [Priority],
+        users: [User]
+    ) async {
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard let checkoutURL else {
+            errorMessage = "Open a repository before creating a project."
+            return
+        }
+        guard !name.isEmpty else {
+            errorMessage = "A project needs a name."
+            return
+        }
+        guard !name.contains("/"), !name.contains("\\") else {
+            errorMessage = "A project name can't contain slashes."
+            return
+        }
+        let projectURL = checkoutURL.appendingPathComponent(name, isDirectory: true)
+        guard !FileManager.default.fileExists(atPath: projectURL.path) else {
+            errorMessage = "A folder named “\(name)” already exists."
+            return
+        }
+
+        isCreatingProject = true
+        errorMessage = nil
+        defer { isCreatingProject = false }
+
+        do {
+            try FileManager.default.createDirectory(at: projectURL, withIntermediateDirectories: true)
+
+            let readmeText = BoardStore.renderProjectReadme(
+                name: name,
+                description: description,
+                lanes: lanes,
+                priorities: priorities,
+                users: users
+            )
+            try readmeText.write(
+                to: projectURL.appendingPathComponent("README.md"),
+                atomically: true,
+                encoding: .utf8
+            )
+
+            for lane in lanes where !lane.folder.isEmpty {
+                let laneURL = projectURL.appendingPathComponent(lane.folder, isDirectory: true)
+                try FileManager.default.createDirectory(at: laneURL, withIntermediateDirectories: true)
+                try "".write(to: laneURL.appendingPathComponent(".gitkeep"), atomically: true, encoding: .utf8)
+            }
+
+            syncStatus = "Creating project…"
+            if hasCommits(at: checkoutURL) {
+                _ = try? await git.pullRebase(at: checkoutURL, auth: auth)
+            }
+            try await git.commit(at: checkoutURL, message: "Create project \(name)", paths: [name])
+            syncStatus = "Pushing…"
+            try await git.push(at: checkoutURL, auth: auth)
+            syncStatus = "Pushed"
+        } catch {
+            syncStatus = "Error"
+            errorMessage = error.localizedDescription
+        }
+
+        do {
+            workspace = try BoardStore.loadWorkspace(at: checkoutURL)
+            if let project = workspace?.projects.first(where: { $0.folder == name }) {
+                selectProject(project)
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// The default 5 lanes for a fresh project (To do → Done, with Done terminal).
+    static func defaultProjectLanes() -> [Lane] {
+        lanes(fromNames: ["To do", "In Progress", "In Review", "Testing", "Done"], terminalLast: true)
+    }
+
+    /// The default P0–P3 priorities for a fresh project.
+    static func defaultPriorities() -> [Priority] {
+        (0...3).map { Priority(id: "P\($0)") }
+    }
+
+    /// Build lanes from an ordered list of display names: `folder = "<n>. <name>"`
+    /// and `id`/`status = name.lowercased()` with spaces replaced by dashes. When
+    /// `terminalLast` is set, the final lane is marked terminal.
+    static func lanes(fromNames names: [String], terminalLast: Bool = false) -> [Lane] {
+        let cleaned = names
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return cleaned.enumerated().map { index, name in
+            let slug = name.lowercased().replacingOccurrences(of: " ", with: "-")
+            return Lane(
+                id: slug,
+                name: name,
+                folder: "\(index + 1). \(name)",
+                status: slug,
+                terminal: (terminalLast && index == cleaned.count - 1) ? true : nil
+            )
         }
     }
 
@@ -265,10 +390,81 @@ final class AppModel {
     }
 
     /// Set the local commit identity in the checkout so commits are attributed.
+    // MARK: - Last-repo persistence
+
+    private struct StoredRepo: Codable {
+        var name: String
+        var fullName: String
+        var ownerLogin: String
+        var cloneURL: String
+        var defaultBranch: String
+        var isPrivate: Bool
+    }
+
+    private func persistLastRepo(_ repo: GitHubRepo) {
+        let stored = StoredRepo(
+            name: repo.name, fullName: repo.fullName, ownerLogin: repo.ownerLogin,
+            cloneURL: repo.cloneURL.absoluteString, defaultBranch: repo.defaultBranch,
+            isPrivate: repo.isPrivate
+        )
+        if let data = try? JSONEncoder().encode(stored) {
+            defaults.set(data, forKey: lastRepoKey)
+        }
+    }
+
+    private func loadLastRepo() -> GitHubRepo? {
+        guard let data = defaults.data(forKey: lastRepoKey),
+              let stored = try? JSONDecoder().decode(StoredRepo.self, from: data),
+              let url = URL(string: stored.cloneURL) else { return nil }
+        return GitHubRepo(
+            name: stored.name, fullName: stored.fullName, ownerLogin: stored.ownerLogin,
+            cloneURL: url, defaultBranch: stored.defaultBranch, isPrivate: stored.isPrivate
+        )
+    }
+
+    /// Fallback: reconstruct a repo from the most-recently-used checkout already on
+    /// disk, by reading its `origin` remote. Works even if prefs didn't persist.
+    private func lastCheckoutRepo() -> GitHubRepo? {
+        guard let support = try? FileManager.default.url(
+            for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: false
+        ) else { return nil }
+        let root = support.appendingPathComponent("GitKanban/checkouts", isDirectory: true)
+        let dirs = (try? FileManager.default.contentsOfDirectory(
+            at: root, includingPropertiesForKeys: [.contentModificationDateKey], options: [.skipsHiddenFiles]
+        )) ?? []
+        let clones = dirs.filter { FileManager.default.fileExists(atPath: $0.appendingPathComponent(".git").path) }
+        func modDate(_ url: URL) -> Date {
+            (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+        }
+        guard let dir = clones.max(by: { modDate($0) < modDate($1) }),
+              let result = try? runner.run(["remote", "get-url", "origin"], in: dir),
+              result.exitCode == 0,
+              let url = URL(string: result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines))
+        else { return nil }
+        let comps = url.pathComponents.filter { $0 != "/" }
+        guard comps.count >= 2 else { return nil }
+        let owner = comps[comps.count - 2]
+        var name = comps[comps.count - 1]
+        if name.hasSuffix(".git") { name = String(name.dropLast(4)) }
+        return GitHubRepo(
+            name: name, fullName: "\(owner)/\(name)", ownerLogin: owner,
+            cloneURL: url, defaultBranch: "main", isPrivate: false
+        )
+    }
+
+    /// Whether the checkout has at least one commit (an unborn branch can't be pulled).
+    private func hasCommits(at dir: URL) -> Bool {
+        guard let result = try? runner.run(["rev-parse", "--verify", "--quiet", "HEAD"], in: dir) else {
+            return false
+        }
+        return result.exitCode == 0
+    }
+
     private func configureIdentity(at dir: URL) throws {
         let name = login ?? "GitKanban"
         let email = "\(login ?? "gitkanban")@users.noreply.github.com"
         try runner.run(["config", "user.name", name], in: dir)
         try runner.run(["config", "user.email", email], in: dir)
     }
+
 }
