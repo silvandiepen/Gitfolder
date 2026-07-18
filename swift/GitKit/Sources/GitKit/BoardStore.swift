@@ -207,4 +207,146 @@ public enum BoardStore {
         }
         return .frontmatter
     }
+
+    // MARK: Workspace loading ([project]/[lane]/[task] hierarchy)
+
+    /// Load the workspace at `root`: the root config plus every project folder
+    /// (an immediate subdirectory that contains a `README.md`). Projects are sorted
+    /// by display name.
+    public static func loadWorkspace(at root: URL) throws -> Workspace {
+        let rootConfig = try loadBoardConfig(readme: root.appendingPathComponent("README.md"))
+
+        let fm = FileManager.default
+        let entries = (try? fm.contentsOfDirectory(
+            at: root,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        )) ?? []
+
+        var projects: [BoardProject] = []
+        for entry in entries {
+            let folder = entry.lastPathComponent
+            guard !folder.hasPrefix("."), folder != ".git" else { continue }
+            let isDirectory = (try? entry.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+            guard isDirectory else { continue }
+            let readme = entry.appendingPathComponent("README.md")
+            guard fm.fileExists(atPath: readme.path) else { continue }
+
+            let config = try loadProjectConfig(readme: readme)
+            let name = config.project?.isEmpty == false ? config.project! : folder
+            projects.append(BoardProject(id: folder, name: name, folder: folder, config: config))
+        }
+
+        projects.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        return Workspace(rootConfig: rootConfig, projects: projects)
+    }
+
+    /// Resolve and load a single project's board. Cards are read from each lane's
+    /// folder (the lane is known from the folder, not the card `status`), and sorted
+    /// within a lane the same way `columns(cards:config:)` does. Non-lane subfolders
+    /// are ignored; their cards are collected into `uncategorised`.
+    public static func loadProjectBoard(
+        root: URL,
+        project: BoardProject,
+        rootConfig: BoardConfig
+    ) throws -> LoadedBoard {
+        let effective = resolveEffectiveConfig(rootConfig, project.config)
+        let projectURL = root.appendingPathComponent(project.folder)
+
+        var columns: [Column] = []
+        var laneFolders = Set<String>()
+        for lane in effective.lanes {
+            laneFolders.insert(lane.folder)
+            let laneURL = projectURL.appendingPathComponent(lane.folder)
+            let cards: [Card]
+            if FileManager.default.fileExists(atPath: laneURL.path) {
+                cards = try loadCards(in: laneURL, fieldSource: effective.fieldSource)
+            } else {
+                cards = []
+            }
+            let sorted = cards.sorted { compare($0, $1, config: effective) < 0 }
+            columns.append(Column(lane: lane, cards: sorted))
+        }
+
+        // Cards living in project subfolders that are not lane folders → uncategorised.
+        var uncategorised: [Card] = []
+        let fm = FileManager.default
+        let subEntries = (try? fm.contentsOfDirectory(
+            at: projectURL,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        )) ?? []
+        for entry in subEntries {
+            let folder = entry.lastPathComponent
+            guard !folder.hasPrefix("."), !laneFolders.contains(folder) else { continue }
+            let isDirectory = (try? entry.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+            guard isDirectory else { continue }
+            uncategorised.append(contentsOf: try loadCards(in: entry, fieldSource: effective.fieldSource))
+        }
+
+        return LoadedBoard(config: effective, columns: columns, uncategorised: uncategorised)
+    }
+
+    /// Parse a `BoardConfig` from a README's frontmatter, defaulting to empty when
+    /// the file or its frontmatter is missing.
+    private static func loadBoardConfig(readme: URL) throws -> BoardConfig {
+        guard let text = try? String(contentsOf: readme, encoding: .utf8) else { return BoardConfig() }
+        let (frontmatter, _) = BoardMarkdown.splitFrontmatter(text)
+        guard let frontmatter else { return BoardConfig() }
+        return try parseBoardConfig(yaml: frontmatter)
+    }
+
+    /// Parse a `ProjectConfig` from a README's frontmatter, defaulting to empty when
+    /// the frontmatter is missing.
+    private static func loadProjectConfig(readme: URL) throws -> ProjectConfig {
+        guard let text = try? String(contentsOf: readme, encoding: .utf8) else { return ProjectConfig() }
+        let (frontmatter, _) = BoardMarkdown.splitFrontmatter(text)
+        guard let frontmatter else { return ProjectConfig() }
+        return try parseProjectConfig(yaml: frontmatter)
+    }
+}
+
+// MARK: Workspace models
+
+/// A project discovered in a workspace: a folder under the root containing a
+/// `README.md` project config.
+public struct BoardProject: Identifiable, Sendable, Equatable {
+    /// Folder name (also the stable identity within a workspace).
+    public var id: String
+    /// Display name: the project config's `project` name if present, else the folder.
+    public var name: String
+    /// Folder name under the workspace root.
+    public var folder: String
+    public var config: ProjectConfig
+
+    public init(id: String, name: String, folder: String, config: ProjectConfig) {
+        self.id = id
+        self.name = name
+        self.folder = folder
+        self.config = config
+    }
+}
+
+/// A loaded workspace: the root board config and the projects it contains.
+public struct Workspace: Sendable {
+    public var rootConfig: BoardConfig
+    public var projects: [BoardProject]
+
+    public init(rootConfig: BoardConfig, projects: [BoardProject]) {
+        self.rootConfig = rootConfig
+        self.projects = projects
+    }
+}
+
+/// A single project's resolved board: its effective config plus the laid-out columns.
+public struct LoadedBoard: Sendable {
+    public var config: EffectiveConfig
+    public var columns: [Column]
+    public var uncategorised: [Card]
+
+    public init(config: EffectiveConfig, columns: [Column], uncategorised: [Card]) {
+        self.config = config
+        self.columns = columns
+        self.uncategorised = uncategorised
+    }
 }
