@@ -51,6 +51,7 @@ private struct ColumnView: View {
     let column: Column
     var width: CGFloat = 300
     var laneColor: Color = .secondary
+    @State private var isDropTargeted = false
 
     private var isLane: Bool { !column.lane.folder.isEmpty }
 
@@ -85,8 +86,17 @@ private struct ColumnView: View {
         }
         .frame(width: width, alignment: .leading)
         .padding(12)
-        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(laneColor.opacity(0.30), lineWidth: 1))
+        .background(isDropTargeted ? AnyShapeStyle(laneColor.opacity(0.14)) : AnyShapeStyle(.quaternary.opacity(0.4)), in: RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(isDropTargeted ? laneColor : laneColor.opacity(0.30),
+                        lineWidth: isDropTargeted ? 2 : 1)
+        )
+        .dropDestination(for: String.self) { ids, _ in
+            guard isLane, let id = ids.first else { return false }
+            Task { await model.moveCard(cardID: id, to: column.lane) }
+            return true
+        } isTargeted: { isDropTargeted = $0 }
     }
 }
 
@@ -127,13 +137,17 @@ private struct LanesCarousel: View {
         }
     }
 
-    /// 1.0 for the focused lane, shrinking with distance so out-of-focus lanes
-    /// are smaller (and, via negative padding, narrower).
+    /// The focused lane and its two neighbours stay full size (≈3 in focus); the
+    /// rest shrink, and further-out lanes shrink more.
     private func scale(for column: Column) -> CGFloat {
         guard let focusedID,
               let focusedIndex = columns.firstIndex(where: { $0.id == focusedID }),
               let index = columns.firstIndex(where: { $0.id == column.id }) else { return 1 }
-        return max(0.62, 1 - CGFloat(abs(index - focusedIndex)) * 0.13)
+        switch abs(index - focusedIndex) {
+        case 0, 1: return 1.0
+        case 2: return 0.66
+        default: return 0.46
+        }
     }
 }
 
@@ -163,6 +177,7 @@ private struct CardCell: View {
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(.quaternary, lineWidth: 1))
         .contentShape(Rectangle())
         .onTapGesture { model.selectedCard = card }
+        .draggable(card.fields.id)
     }
 
     private var displayTitle: String {

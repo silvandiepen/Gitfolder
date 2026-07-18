@@ -372,6 +372,64 @@ final class AppModel {
         return needsQuote ? "\"\(s.replacingOccurrences(of: "\"", with: "\\\""))\"" : s
     }
 
+    /// Move a card to another lane: move its file into the new lane folder, update
+    /// its `status` frontmatter, then commit + push. Reloads the board.
+    func moveCard(cardID: String, to lane: Lane) async {
+        guard let checkoutURL, let project = selectedProject, let board else { return }
+        guard let sourceColumn = board.columns.first(where: { col in
+            col.cards.contains { $0.fields.id == cardID }
+        }),
+        let card = sourceColumn.cards.first(where: { $0.fields.id == cardID }),
+        let fileName = card.fileName else { return }
+        let sourceLane = sourceColumn.lane
+        guard sourceLane.id != lane.id, !lane.folder.isEmpty else { return }
+
+        errorMessage = nil
+        let base = checkoutURL.appendingPathComponent(project.folder, isDirectory: true)
+        let sourceURL = base.appendingPathComponent(sourceLane.folder).appendingPathComponent(fileName)
+        let targetDir = base.appendingPathComponent(lane.folder, isDirectory: true)
+        let targetURL = targetDir.appendingPathComponent(fileName)
+
+        do {
+            try FileManager.default.createDirectory(at: targetDir, withIntermediateDirectories: true)
+            let original = (try? String(contentsOf: sourceURL, encoding: .utf8)) ?? card.body
+            try updatingStatus(in: original, to: lane.status).write(to: targetURL, atomically: true, encoding: .utf8)
+            if targetURL.path != sourceURL.path { try? FileManager.default.removeItem(at: sourceURL) }
+
+            let sourceRel = "\(project.folder)/\(sourceLane.folder)/\(fileName)"
+            let targetRel = "\(project.folder)/\(lane.folder)/\(fileName)"
+            syncStatus = "Moving…"
+            if hasCommits(at: checkoutURL) { _ = try? await git.pullRebase(at: checkoutURL, auth: auth) }
+            try await git.commit(at: checkoutURL, message: "Move \(cardID) to \(lane.name)", paths: [sourceRel, targetRel])
+            syncStatus = "Pushing…"
+            try await git.push(at: checkoutURL, auth: auth)
+            syncStatus = "Pushed"
+        } catch {
+            syncStatus = "Error"
+            errorMessage = error.localizedDescription
+        }
+        if let project = selectedProject { selectProject(project) }
+    }
+
+    /// Replace the first `status:` line inside the frontmatter with a new value.
+    private func updatingStatus(in content: String, to status: String) -> String {
+        var lines = content.components(separatedBy: "\n")
+        var inFrontmatter = false
+        for index in lines.indices {
+            let trimmed = lines[index].trimmingCharacters(in: .whitespaces)
+            if trimmed == "---" {
+                if inFrontmatter { break }   // end of frontmatter
+                inFrontmatter = true
+                continue
+            }
+            if inFrontmatter, lines[index].hasPrefix("status:") {
+                lines[index] = "status: \(status)"
+                break
+            }
+        }
+        return lines.joined(separator: "\n")
+    }
+
     /// The default 5 lanes for a fresh project (To do → Done, with Done terminal).
     static func defaultProjectLanes() -> [Lane] {
         lanes(fromNames: ["To do", "In Progress", "In Review", "Testing", "Done"], terminalLast: true)
