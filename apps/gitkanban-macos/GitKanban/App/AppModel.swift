@@ -28,6 +28,9 @@ final class AppModel {
     var login: String?
     var deviceAuth: GitHubDeviceAuthorization?
     var isAuthorizing = false
+    /// True until the initial session restore finishes (show a loader, not a flash
+    /// through Connect → RepoPicker → Workspace).
+    var isRestoring = true
 
     // MARK: State — repos
     var repos: [GitHubRepo] = []
@@ -108,6 +111,7 @@ final class AppModel {
 
     /// Load a stored token from the keychain and, if present, restore the session.
     func restore() async {
+        defer { isRestoring = false }
         do {
             guard let stored = try keychain.load()?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !stored.isEmpty else { return }
@@ -799,6 +803,19 @@ final class AppModel {
     }
 
     func canEdit(_ card: Card) -> Bool { fileURL(for: card) != nil }
+
+    /// The github.com blob URL for a card's file (Find on GitHub).
+    func githubURL(for card: Card) -> URL? {
+        guard let repo = activeRepo, let relative = relativePath(for: card) else { return nil }
+        let encoded = relative.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? relative
+        return URL(string: "https://github.com/\(repo.fullName)/blob/\(repo.defaultBranch)/\(encoded)")
+    }
+
+    /// The commit history of a card's file (for the History window).
+    func fileHistory(for card: Card) async -> [CommitInfo] {
+        guard let checkoutURL, let relative = relativePath(for: card) else { return [] }
+        return (try? await git.fileHistory(at: checkoutURL, file: relative, limit: 50)) ?? []
+    }
 
     /// The raw markdown file (frontmatter + body) as plain text, for the editor.
     func rawText(for card: Card) -> String? {

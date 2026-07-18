@@ -6,7 +6,14 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if !model.isConnected {
+            if model.isRestoring {
+                VStack(spacing: 16) {
+                    Image(systemName: "square.stack.3d.up.fill")
+                        .font(.system(size: 40)).foregroundStyle(.tint)
+                    ProgressView().controlSize(.small)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if !model.isConnected {
                 ConnectView()
             } else if model.activeRepo == nil {
                 RepoPickerView()
