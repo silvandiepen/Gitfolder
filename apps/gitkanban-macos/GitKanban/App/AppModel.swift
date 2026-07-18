@@ -31,6 +31,10 @@ final class AppModel {
     /// When set, the New Task sheet is shown, pre-selecting this lane.
     var newTaskLane: Lane?
     var isCreatingTask = false
+    /// When set, the Project Settings sheet is shown for this project.
+    var settingsProject: BoardProject?
+    /// The card currently being dragged (hidden in its lane while dragging).
+    var draggingCardID: String?
 
     // MARK: State — status
     var syncStatus = "Idle"
@@ -197,6 +201,7 @@ final class AppModel {
     func selectProject(_ project: BoardProject) {
         guard let checkoutURL, let workspace else { return }
         selectedCard = nil
+        draggingCardID = nil
         do {
             board = try BoardStore.loadProjectBoard(
                 root: checkoutURL,
@@ -375,16 +380,25 @@ final class AppModel {
     /// Move a card to another lane: move its file into the new lane folder, update
     /// its `status` frontmatter, then commit + push. Reloads the board.
     func moveCard(cardID: String, to lane: Lane) async {
-        guard let checkoutURL, let project = selectedProject, let board else { return }
-        guard let sourceColumn = board.columns.first(where: { col in
+        guard let checkoutURL, let project = selectedProject, var board else { return }
+        guard let sourceIndex = board.columns.firstIndex(where: { col in
             col.cards.contains { $0.fields.id == cardID }
         }),
-        let card = sourceColumn.cards.first(where: { $0.fields.id == cardID }),
-        let fileName = card.fileName else { return }
-        let sourceLane = sourceColumn.lane
+        let cardIndex = board.columns[sourceIndex].cards.firstIndex(where: { $0.fields.id == cardID }),
+        let targetIndex = board.columns.firstIndex(where: { $0.lane.id == lane.id }) else { return }
+        let sourceLane = board.columns[sourceIndex].lane
         guard sourceLane.id != lane.id, !lane.folder.isEmpty else { return }
+        var card = board.columns[sourceIndex].cards[cardIndex]
+        guard let fileName = card.fileName else { return }
 
+        // Optimistic UI: move the card between columns right away.
+        draggingCardID = nil
         errorMessage = nil
+        card.fields.status = lane.status
+        board.columns[sourceIndex].cards.remove(at: cardIndex)
+        board.columns[targetIndex].cards.append(card)
+        self.board = board
+
         let base = checkoutURL.appendingPathComponent(project.folder, isDirectory: true)
         let sourceURL = base.appendingPathComponent(sourceLane.folder).appendingPathComponent(fileName)
         let targetDir = base.appendingPathComponent(lane.folder, isDirectory: true)
@@ -407,8 +421,9 @@ final class AppModel {
         } catch {
             syncStatus = "Error"
             errorMessage = error.localizedDescription
+            // Revert the optimistic move by reloading from disk.
+            if let project = selectedProject { selectProject(project) }
         }
-        if let project = selectedProject { selectProject(project) }
     }
 
     /// Replace the first `status:` line inside the frontmatter with a new value.
@@ -428,6 +443,37 @@ final class AppModel {
             }
         }
         return lines.joined(separator: "\n")
+    }
+
+    /// Delete a card: remove its file, then commit + push. Reloads the board.
+    func deleteCard(cardID: String) async {
+        guard let checkoutURL, let project = selectedProject, let board else { return }
+        guard let column = board.columns.first(where: { c in c.cards.contains { $0.fields.id == cardID } }),
+              let card = column.cards.first(where: { $0.fields.id == cardID }),
+              let fileName = card.fileName else { return }
+        errorMessage = nil
+        let relative = "\(project.folder)/\(column.lane.folder)/\(fileName)"
+        do {
+            try? FileManager.default.removeItem(at: checkoutURL.appendingPathComponent(relative))
+            syncStatus = "Deleting…"
+            if hasCommits(at: checkoutURL) { _ = try? await git.pullRebase(at: checkoutURL, auth: auth) }
+            try await git.commit(at: checkoutURL, message: "Delete \(cardID)", paths: [relative])
+            syncStatus = "Pushing…"
+            try await git.push(at: checkoutURL, auth: auth)
+            syncStatus = "Pushed"
+        } catch {
+            syncStatus = "Error"
+            errorMessage = error.localizedDescription
+        }
+        if let project = selectedProject { selectProject(project) }
+    }
+
+    /// Reveal a project's folder in Finder.
+    func revealInFinder(_ project: BoardProject) {
+        guard let checkoutURL else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([
+            checkoutURL.appendingPathComponent(project.folder, isDirectory: true)
+        ])
     }
 
     /// The default 5 lanes for a fresh project (To do → Done, with Done terminal).

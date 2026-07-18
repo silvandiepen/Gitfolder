@@ -35,6 +35,12 @@ struct WorkspaceView: View {
                         List(projects, selection: selection) { project in
                             Label(project.name, systemImage: "folder")
                                 .tag(project.id)
+                                .contextMenu {
+                                    Button("Project Settings…") { model.settingsProject = project }
+                                    Button("Reveal in Finder") { model.revealInFinder(project) }
+                                    Divider()
+                                    Button("Refresh") { Task { await model.refresh() } }
+                                }
                         }
                     }
                 }
@@ -92,6 +98,9 @@ struct WorkspaceView: View {
         .sheet(isPresented: $model.isShowingNewProjectSheet) {
             NewProjectSheet(isPresented: $model.isShowingNewProjectSheet)
                 .environment(model)
+        }
+        .sheet(item: $model.settingsProject) { project in
+            ProjectSettingsSheet(project: project).environment(model)
         }
     }
 

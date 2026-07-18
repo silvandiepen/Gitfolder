@@ -1,5 +1,6 @@
 import GitKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Renders the selected project's board: its lanes as columns, plus any
 /// uncategorised cards. Tapping a card opens its detail sheet.
@@ -92,11 +93,14 @@ private struct ColumnView: View {
                 .stroke(isDropTargeted ? laneColor : laneColor.opacity(0.30),
                         lineWidth: isDropTargeted ? 2 : 1)
         )
-        .dropDestination(for: String.self) { ids, _ in
-            guard isLane, let id = ids.first else { return false }
-            Task { await model.moveCard(cardID: id, to: column.lane) }
+        .onDrop(of: [.text], isTargeted: $isDropTargeted) { providers in
+            guard isLane, let provider = providers.first else { return false }
+            _ = provider.loadObject(ofClass: NSString.self) { object, _ in
+                guard let id = object as? String else { return }
+                Task { @MainActor in await model.moveCard(cardID: id, to: column.lane) }
+            }
             return true
-        } isTargeted: { isDropTargeted = $0 }
+        }
     }
 }
 
@@ -167,8 +171,28 @@ private struct CardCell: View {
         .background(.background, in: RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(.quaternary, lineWidth: 1))
         .contentShape(Rectangle())
+        .opacity(model.draggingCardID == card.fields.id ? 0.3 : 1)
         .onTapGesture { model.selectedCard = card }
-        .draggable(card.fields.id)
+        .onDrag {
+            model.draggingCardID = card.fields.id
+            return NSItemProvider(object: card.fields.id as NSString)
+        }
+        .contextMenu {
+            Button("Open") { model.selectedCard = card }
+            if let lanes = model.board?.config.lanes, !lanes.isEmpty {
+                Menu("Move to") {
+                    ForEach(lanes, id: \.id) { lane in
+                        Button(lane.name) {
+                            Task { await model.moveCard(cardID: card.fields.id, to: lane) }
+                        }
+                    }
+                }
+            }
+            Divider()
+            Button("Delete", role: .destructive) {
+                Task { await model.deleteCard(cardID: card.fields.id) }
+            }
+        }
     }
 
     private var displayTitle: String {
