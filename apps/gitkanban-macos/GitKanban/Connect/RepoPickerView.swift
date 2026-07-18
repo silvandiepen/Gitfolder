@@ -4,12 +4,21 @@ import SwiftUI
 /// Pick a repository to open. Tapping a repo clones it into the app's own checkout.
 struct RepoPickerView: View {
     @Environment(AppModel.self) private var model
+    /// When shown as a sheet ("Add Repository"), offers a Close button instead of
+    /// taking over the whole window.
+    var isSheet = false
     @State private var search = ""
+
+    /// Repos not already connected (a repo can only be connected once).
+    private var availableRepos: [GitHubRepo] {
+        let connected = Set(model.connectedRepos.map(\.id))
+        return model.repos.filter { !connected.contains($0.fullName) }
+    }
 
     private var filtered: [GitHubRepo] {
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return model.repos }
-        return model.repos.filter { $0.fullName.localizedCaseInsensitiveContains(query) }
+        guard !query.isEmpty else { return availableRepos }
+        return availableRepos.filter { $0.fullName.localizedCaseInsensitiveContains(query) }
     }
 
     var body: some View {
@@ -23,13 +32,17 @@ struct RepoPickerView: View {
     private var header: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Choose a repository").font(.headline)
+                Text(isSheet ? "Add a repository" : "Choose a repository").font(.headline)
                 if let login = model.login {
                     Text("Signed in as \(login)").font(.caption).foregroundStyle(.secondary)
                 }
             }
             Spacer()
-            Button("Sign out") { model.signOut() }
+            if isSheet {
+                Button("Close") { model.isShowingRepoPicker = false }
+            } else {
+                Button("Sign out") { model.signOut() }
+            }
         }
         .padding(12)
     }
@@ -42,10 +55,10 @@ struct RepoPickerView: View {
             spinner("\(model.syncStatus)")
         } else {
             List {
-                if search.isEmpty, let last = model.lastUsedRepo {
+                if let last = lastUsed {
                     Section("Last Used") { repoRow(last) }
                 }
-                Section(search.isEmpty && model.lastUsedRepo != nil ? "All Repositories" : "Repositories") {
+                Section(lastUsed != nil ? "All Repositories" : "Repositories") {
                     ForEach(reposToShow) { repoRow($0) }
                 }
             }
@@ -58,8 +71,15 @@ struct RepoPickerView: View {
         }
     }
 
+    /// The last-used repo, shown pinned on top — but only when it isn't already
+    /// connected and we're not filtering.
+    private var lastUsed: GitHubRepo? {
+        guard search.isEmpty, let last = model.lastUsedRepo else { return nil }
+        return model.connectedRepos.contains { $0.id == last.fullName } ? nil : last
+    }
+
     private var reposToShow: [GitHubRepo] {
-        guard search.isEmpty, let last = model.lastUsedRepo?.fullName else { return filtered }
+        guard let last = lastUsed?.fullName else { return filtered }
         return filtered.filter { $0.fullName != last }
     }
 

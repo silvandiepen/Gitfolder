@@ -3,6 +3,16 @@ import Foundation
 import GitKit
 import Observation
 
+/// A repository the app has connected: its GitHub metadata, the app-owned checkout
+/// directory, and its loaded workspace (project list). Several can be connected at
+/// once; the sidebar shows a section per repo.
+struct ConnectedRepo: Identifiable {
+    var repo: GitHubRepo
+    var checkoutURL: URL
+    var workspace: Workspace?
+    var id: String { repo.fullName }
+}
+
 /// How the board renders the selected project.
 enum BoardViewMode: String, CaseIterable, Identifiable {
     case lanes
@@ -35,6 +45,13 @@ final class AppModel {
     // MARK: State — repos
     var repos: [GitHubRepo] = []
     var isLoadingRepos = false
+
+    // MARK: State — connected repos
+    /// Every repository currently connected (each with its own checkout + workspace).
+    /// The sidebar renders one section per entry.
+    var connectedRepos: [ConnectedRepo] = []
+    /// Whether the "add another repository" picker sheet is shown.
+    var isShowingRepoPicker = false
 
     // MARK: State — active checkout / board
     var activeRepo: GitHubRepo?
@@ -104,6 +121,8 @@ final class AppModel {
     @ObservationIgnored private let runner = GitProcessRunner()
     @ObservationIgnored private let defaults = UserDefaults.standard
     @ObservationIgnored private let lastRepoKey = "lastOpenedRepoFullName"
+    @ObservationIgnored private let connectedReposKey = "connectedRepos"
+    @ObservationIgnored private let lastProjectKey = "lastSelectedProjectFolder"
 
     // MARK: Computed
     var isConnected: Bool { token != nil }
@@ -117,7 +136,8 @@ final class AppModel {
 
     // MARK: - Lifecycle
 
-    /// Load a stored token from the keychain and, if present, restore the session.
+    /// Load a stored token from the keychain and, if present, restore the session:
+    /// reconnect every previously-connected repo and reselect the last project.
     func restore() async {
         defer { isRestoring = false }
         do {
@@ -126,10 +146,26 @@ final class AppModel {
             token = stored
             login = try? await oauth.loadViewerLogin(token: stored)
             await loadRepos()
-            // Re-open last session's repository (persisted in full, so it works
-            // even for repos beyond the first page of the list).
-            if let repo = loadLastRepo() ?? lastCheckoutRepo() {
-                await openRepo(repo)
+
+            // The set of repos to reconnect: the persisted connected list, falling back
+            // to the single last-opened repo (migrates older single-repo sessions).
+            var toConnect = loadConnectedRepos()
+            if toConnect.isEmpty, let last = loadLastRepo() ?? lastCheckoutRepo() {
+                toConnect = [last]
+            }
+            for repo in toConnect {
+                await connect(repo, activate: false)
+            }
+            persistConnectedRepos()
+
+            // Activate the last-active repo + project (or the first available).
+            let lastRepoName = loadLastRepo()?.fullName
+            if let active = connectedRepos.first(where: { $0.repo.fullName == lastRepoName })
+                ?? connectedRepos.first {
+                let lastProject = loadLastProject()
+                let project = active.workspace?.projects.first { $0.folder == lastProject }
+                    ?? active.workspace?.projects.first
+                activate(active, project: project)
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -165,10 +201,13 @@ final class AppModel {
     func signOut() {
         try? keychain.delete()
         defaults.removeObject(forKey: lastRepoKey)
+        defaults.removeObject(forKey: connectedReposKey)
+        defaults.removeObject(forKey: lastProjectKey)
         token = nil
         login = nil
         deviceAuth = nil
         repos = []
+        connectedRepos = []
         activeRepo = nil
         checkoutURL = nil
         workspace = nil
@@ -196,14 +235,19 @@ final class AppModel {
 
     // MARK: - Open a repo (own-the-checkout)
 
-    /// Make `repo` the active board. Clones it into the app's own checkout dir the
-    /// first time; pulls afterwards. Then loads the workspace and selects the first
-    /// project.
+    /// Connect `repo` from the repo picker: ensure its checkout, load its workspace,
+    /// add it to the connected list, then make it the active board.
     func openRepo(_ repo: GitHubRepo) async {
-        activeRepo = repo
-        persistLastRepo(repo)
+        await connect(repo, activate: true)
+        persistConnectedRepos()
+        isShowingRepoPicker = false
+    }
+
+    /// Ensure a repo's checkout exists (clone first time, pull afterwards), load its
+    /// workspace, and record it in `connectedRepos`. When `activate` is set, also make
+    /// it the active board and select its first project.
+    private func connect(_ repo: GitHubRepo, activate shouldActivate: Bool) async {
         errorMessage = nil
-        selectedCard = nil
         do {
             let dir = try checkoutDirectory(for: repo)
             let gitDir = dir.appendingPathComponent(".git")
@@ -221,14 +265,14 @@ final class AppModel {
                 try await git.clone(repo.cloneURL, to: dir, auth: auth)
                 try configureIdentity(at: dir)
             }
-            checkoutURL = dir
-            workspace = try BoardStore.loadWorkspace(at: dir)
-            if let first = workspace?.projects.first {
-                selectProject(first)
+            let ws = try BoardStore.loadWorkspace(at: dir)
+            let connected = ConnectedRepo(repo: repo, checkoutURL: dir, workspace: ws)
+            if let index = connectedRepos.firstIndex(where: { $0.id == connected.id }) {
+                connectedRepos[index] = connected
             } else {
-                selectedProject = nil
-                board = nil
+                connectedRepos.append(connected)
             }
+            if shouldActivate { activate(connected, project: ws.projects.first) }
             syncStatus = "Ready"
         } catch {
             syncStatus = "Error"
@@ -236,22 +280,69 @@ final class AppModel {
         }
     }
 
-    /// Re-pull the active repo and reload the board (Refresh action).
-    func refresh() async {
-        guard let repo = activeRepo else { return }
-        await openRepo(repo)
+    /// Make a connected repo the active board context and (optionally) select a project.
+    func activate(_ connected: ConnectedRepo, project: BoardProject?) {
+        activeRepo = connected.repo
+        checkoutURL = connected.checkoutURL
+        workspace = connected.workspace
+        selectedCard = nil
+        persistLastRepo(connected.repo)
+        if let project {
+            selectProject(project)
+        } else {
+            selectedProject = nil
+            board = nil
+        }
     }
 
-    /// Leave the active board and return to the repo picker.
-    func closeRepo() {
-        defaults.removeObject(forKey: lastRepoKey)
-        activeRepo = nil
-        checkoutURL = nil
-        workspace = nil
-        selectedProject = nil
-        board = nil
-        selectedCard = nil
-        syncStatus = "Idle"
+    /// Sidebar selection: activate the owning repo (if needed) and open the project.
+    func openProject(_ project: BoardProject, in connected: ConnectedRepo) {
+        if activeRepo?.fullName != connected.repo.fullName {
+            activate(connected, project: project)
+        } else {
+            selectProject(project)
+        }
+        persistLastProject(project)
+    }
+
+    /// Re-pull the active repo and reload its board (Refresh action).
+    func refresh() async {
+        guard let repo = activeRepo else { return }
+        let keepProject = selectedProject?.folder
+        await connect(repo, activate: false)
+        if let active = connectedRepos.first(where: { $0.repo.fullName == repo.fullName }) {
+            let project = active.workspace?.projects.first { $0.folder == keepProject }
+                ?? active.workspace?.projects.first
+            activate(active, project: project)
+        }
+    }
+
+    /// Disconnect a repo: drop it from the sidebar (its checkout stays on disk). If it
+    /// was active, fall back to another connected repo.
+    func disconnectRepo(_ connected: ConnectedRepo) {
+        connectedRepos.removeAll { $0.id == connected.id }
+        persistConnectedRepos()
+        if activeRepo?.fullName == connected.repo.fullName {
+            if let next = connectedRepos.first {
+                activate(next, project: next.workspace?.projects.first)
+            } else {
+                activeRepo = nil
+                checkoutURL = nil
+                workspace = nil
+                selectedProject = nil
+                board = nil
+                syncStatus = "Idle"
+            }
+        }
+    }
+
+    /// Copy the active workspace back into its `connectedRepos` entry so the sidebar
+    /// reflects project add/remove after a mutation reloads the workspace.
+    private func syncActiveWorkspaceToConnected() {
+        guard let activeRepo, let workspace,
+              let index = connectedRepos.firstIndex(where: { $0.repo.fullName == activeRepo.fullName })
+        else { return }
+        connectedRepos[index].workspace = workspace
     }
 
     // MARK: - Projects
@@ -346,6 +437,7 @@ final class AppModel {
 
         do {
             workspace = try BoardStore.loadWorkspace(at: checkoutURL)
+            syncActiveWorkspaceToConnected()
             if let project = workspace?.projects.first(where: { $0.folder == name }) {
                 selectProject(project)
             }
@@ -830,6 +922,7 @@ final class AppModel {
         }
         do {
             workspace = try BoardStore.loadWorkspace(at: checkoutURL)
+            syncActiveWorkspaceToConnected()
             if let updated = workspace?.projects.first(where: { $0.folder == project.folder }) {
                 selectProject(updated)
             }
@@ -1120,25 +1213,54 @@ final class AppModel {
         var isPrivate: Bool
     }
 
-    private func persistLastRepo(_ repo: GitHubRepo) {
-        let stored = StoredRepo(
+    private func storedRepo(from repo: GitHubRepo) -> StoredRepo {
+        StoredRepo(
             name: repo.name, fullName: repo.fullName, ownerLogin: repo.ownerLogin,
             cloneURL: repo.cloneURL.absoluteString, defaultBranch: repo.defaultBranch,
             isPrivate: repo.isPrivate
         )
-        if let data = try? JSONEncoder().encode(stored) {
+    }
+
+    private func gitHubRepo(from stored: StoredRepo) -> GitHubRepo? {
+        guard let url = URL(string: stored.cloneURL) else { return nil }
+        return GitHubRepo(
+            name: stored.name, fullName: stored.fullName, ownerLogin: stored.ownerLogin,
+            cloneURL: url, defaultBranch: stored.defaultBranch, isPrivate: stored.isPrivate
+        )
+    }
+
+    private func persistLastRepo(_ repo: GitHubRepo) {
+        if let data = try? JSONEncoder().encode(storedRepo(from: repo)) {
             defaults.set(data, forKey: lastRepoKey)
         }
     }
 
     private func loadLastRepo() -> GitHubRepo? {
         guard let data = defaults.data(forKey: lastRepoKey),
-              let stored = try? JSONDecoder().decode(StoredRepo.self, from: data),
-              let url = URL(string: stored.cloneURL) else { return nil }
-        return GitHubRepo(
-            name: stored.name, fullName: stored.fullName, ownerLogin: stored.ownerLogin,
-            cloneURL: url, defaultBranch: stored.defaultBranch, isPrivate: stored.isPrivate
-        )
+              let stored = try? JSONDecoder().decode(StoredRepo.self, from: data) else { return nil }
+        return gitHubRepo(from: stored)
+    }
+
+    /// Persist the full connected-repo list so every one reconnects next launch.
+    private func persistConnectedRepos() {
+        let stored = connectedRepos.map { storedRepo(from: $0.repo) }
+        if let data = try? JSONEncoder().encode(stored) {
+            defaults.set(data, forKey: connectedReposKey)
+        }
+    }
+
+    private func loadConnectedRepos() -> [GitHubRepo] {
+        guard let data = defaults.data(forKey: connectedReposKey),
+              let stored = try? JSONDecoder().decode([StoredRepo].self, from: data) else { return [] }
+        return stored.compactMap(gitHubRepo(from:))
+    }
+
+    private func persistLastProject(_ project: BoardProject) {
+        defaults.set(project.folder, forKey: lastProjectKey)
+    }
+
+    private func loadLastProject() -> String? {
+        defaults.string(forKey: lastProjectKey)
     }
 
     /// Fallback: reconstruct a repo from the most-recently-used checkout already on

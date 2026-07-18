@@ -5,16 +5,26 @@ import SwiftUI
 struct WorkspaceView: View {
     @Environment(AppModel.self) private var model
 
-    private var projects: [BoardProject] { model.workspace?.projects ?? [] }
-    private var rootLaneCount: Int { model.workspace?.rootConfig.lanes.count ?? 0 }
+    /// A sidebar row's stable key: repo id + project id (project folders can repeat
+    /// across repos, so the repo must be part of the key).
+    private func rowKey(_ repoID: String, _ projectID: String) -> String {
+        "\(repoID)\u{1}\(projectID)"
+    }
 
     private var selection: Binding<String?> {
         Binding(
-            get: { model.selectedProject?.id },
-            set: { newID in
-                if let project = projects.first(where: { $0.id == newID }) {
-                    model.selectProject(project)
-                }
+            get: {
+                guard let repo = model.activeRepo?.fullName, let proj = model.selectedProject?.id else { return nil }
+                return rowKey(repo, proj)
+            },
+            set: { key in
+                guard let key else { return }
+                let parts = key.components(separatedBy: "\u{1}")
+                guard parts.count == 2,
+                      let connected = model.connectedRepos.first(where: { $0.id == parts[0] }),
+                      let project = connected.workspace?.projects.first(where: { $0.id == parts[1] })
+                else { return }
+                model.openProject(project, in: connected)
             }
         )
     }
@@ -22,43 +32,56 @@ struct WorkspaceView: View {
     var body: some View {
         @Bindable var model = model
         NavigationSplitView {
-            Group {
-                if projects.isEmpty {
-                    VStack {
-                        NewProjectButton { model.isShowingNewProjectSheet = true }
-                            .padding(16)
-                        Spacer()
-                    }
-                } else {
-                    VStack(spacing: 0) {
-                        HStack {
-                            Text("Projects")
-                                .font(.caption).fontWeight(.semibold)
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Text("\(projects.count)")
-                                .font(.caption).foregroundStyle(.tertiary)
-                        }
-                        .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 4)
-
-                        List(projects, selection: selection) { project in
-                            ProjectRow(project: project, rootLaneCount: rootLaneCount)
-                                .tag(project.id)
-                                .contextMenu {
-                                    Button("Project Settings…") { model.settingsProject = project }
-                                    Button("Reveal in Finder") { model.revealInFinder(project) }
-                                    Divider()
-                                    Button("Refresh") { Task { await model.refresh() } }
+            VStack(spacing: 0) {
+                List(selection: selection) {
+                    ForEach(model.connectedRepos) { connected in
+                        Section {
+                            let projects = connected.workspace?.projects ?? []
+                            if projects.isEmpty {
+                                Text("No projects yet")
+                                    .font(.caption).foregroundStyle(.tertiary)
+                                    .padding(.vertical, 2)
+                            } else {
+                                ForEach(projects) { project in
+                                    ProjectRow(
+                                        project: project,
+                                        rootLaneCount: connected.workspace?.rootConfig.lanes.count ?? 0
+                                    )
+                                    .tag(rowKey(connected.id, project.id))
+                                    .contextMenu {
+                                        Button("Project Settings…") { model.settingsProject = project }
+                                        Button("Reveal in Finder") { model.revealInFinder(project) }
+                                        Divider()
+                                        Button("New Project in \(connected.repo.name)…") {
+                                            model.activate(connected, project: nil)
+                                            model.isShowingNewProjectSheet = true
+                                        }
+                                        Button("Refresh") { Task { await model.refresh() } }
+                                    }
                                 }
+                            }
+                        } header: {
+                            repoHeader(connected)
                         }
-
-                        Divider()
-                        NewProjectButton { model.isShowingNewProjectSheet = true }
-                            .padding(12)
                     }
                 }
+
+                Divider()
+                HStack(spacing: 8) {
+                    NewProjectButton { model.isShowingNewProjectSheet = true }
+                    Spacer()
+                    Button {
+                        model.isShowingRepoPicker = true
+                    } label: {
+                        Label("Add Repository", systemImage: "plus.rectangle.on.folder")
+                            .font(.callout)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Connect another repository")
+                }
+                .padding(12)
             }
-            .navigationSplitViewColumnWidth(min: 200, ideal: 240)
+            .navigationSplitViewColumnWidth(min: 220, ideal: 260)
         } detail: {
             BoardView(showNewProject: $model.isShowingNewProjectSheet)
         }
@@ -66,7 +89,8 @@ struct WorkspaceView: View {
             ToolbarItem(placement: .navigation) {
                 if let repo = model.activeRepo {
                     Menu {
-                        Button("Switch Repository…") { model.closeRepo() }
+                        Button("Add Repository…") { model.isShowingRepoPicker = true }
+                        Divider()
                         Button("Sign Out") { model.signOut() }
                     } label: {
                         Text(repo.fullName)
@@ -133,6 +157,39 @@ struct WorkspaceView: View {
         }
         .sheet(item: $model.settingsProject) { project in
             NewProjectSheet(editing: project).environment(model)
+        }
+        .sheet(isPresented: $model.isShowingRepoPicker) {
+            RepoPickerView(isSheet: true)
+                .environment(model)
+                .frame(minWidth: 460, minHeight: 420)
+        }
+    }
+
+    /// Sidebar section header for one connected repo: name + a menu to add a project,
+    /// refresh, or disconnect it.
+    private func repoHeader(_ connected: ConnectedRepo) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: connected.repo.isPrivate ? "lock.fill" : "book.closed.fill")
+                .font(.caption2).foregroundStyle(.tertiary)
+            Text(connected.repo.fullName)
+                .font(.caption).fontWeight(.semibold)
+                .lineLimit(1).truncationMode(.middle)
+            Spacer(minLength: 4)
+            Menu {
+                Button("New Project…") {
+                    model.activate(connected, project: nil)
+                    model.isShowingNewProjectSheet = true
+                }
+                Button("Refresh") {
+                    model.activate(connected, project: connected.workspace?.projects.first)
+                    Task { await model.refresh() }
+                }
+                Divider()
+                Button("Disconnect", role: .destructive) { model.disconnectRepo(connected) }
+            } label: {
+                Image(systemName: "ellipsis").font(.caption)
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
         }
     }
 

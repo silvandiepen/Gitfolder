@@ -15,7 +15,7 @@ struct RootView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if !model.isConnected {
                 ConnectView()
-            } else if model.activeRepo == nil {
+            } else if model.connectedRepos.isEmpty {
                 RepoPickerView()
             } else {
                 WorkspaceView()

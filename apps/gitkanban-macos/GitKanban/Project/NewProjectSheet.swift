@@ -17,6 +17,8 @@ struct NewProjectSheet: View {
     @State private var assigneeItems: [EditableItem] = []
     @State private var seeded = false
     @State private var isSaving = false
+    /// In create mode with several repos connected, which repo the project lands in.
+    @State private var targetRepoID: String?
     @State private var laneOrigins: [UUID: Lane] = [:]
     @State private var priorityNames: [UUID: String] = [:]
     @State private var userNames: [UUID: String] = [:]
@@ -109,6 +111,21 @@ struct NewProjectSheet: View {
     private var projectSection: some View {
         card {
             sectionTitle("Project")
+            if !isEditing && model.connectedRepos.count > 1 {
+                styledField {
+                    Picker("Repository", selection: Binding(
+                        get: { targetRepoID ?? model.activeRepo?.fullName ?? "" },
+                        set: { targetRepoID = $0 }
+                    )) {
+                        ForEach(model.connectedRepos) { connected in
+                            Text(connected.repo.fullName).tag(connected.id)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                } focused: { false }
+            }
             styledField {
                 TextField("Project name", text: $name)
                     .textFieldStyle(.plain)
@@ -363,6 +380,11 @@ struct NewProjectSheet: View {
     }
 
     private func create() async {
+        // Land the project in the chosen repo (when several are connected).
+        if let targetRepoID, targetRepoID != model.activeRepo?.fullName,
+           let target = model.connectedRepos.first(where: { $0.id == targetRepoID }) {
+            model.activate(target, project: nil)
+        }
         let lanes = AppModel.lanes(fromNames: laneItems.map(\.text), terminalLast: true)
         let priorities = priorityItems
             .map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
