@@ -197,13 +197,12 @@ struct DirectoryView: View {
     }
 
     @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .principal) {
+        ToolbarItemGroup(placement: .topBarTrailing) {
             Picker("Layout", selection: $layoutRaw) {
                 ForEach(BrowseLayout.allCases) { l in Image(systemName: l.icon).tag(l.rawValue) }
             }
-            .pickerStyle(.segmented).frame(width: 104)
-        }
-        ToolbarItem(placement: .topBarTrailing) {
+            .pickerStyle(.segmented).frame(width: 96)
+
             Menu {
                 Button { showNewFile = true } label: { Label("New File", systemImage: "doc.badge.plus") }
                 Button { Task { await reload() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }

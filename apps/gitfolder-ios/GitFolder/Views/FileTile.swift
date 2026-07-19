@@ -1,3 +1,4 @@
+import ImageIO
 import SwiftUI
 import UIKit
 
@@ -36,10 +37,29 @@ struct RepoThumbnail: View {
     private func load() async {
         if image != nil { return }
         if let cached = ImageCache.shared.image(for: key) { image = cached; return }
-        guard let data = try? await model.readData(entry.path), let full = UIImage(data: data) else { return }
-        let thumb = full.preparingThumbnail(of: CGSize(width: side * 3, height: side * 3)) ?? full
+        guard let data = try? await model.readData(entry.path) else { return }
+        // Decode straight to a thumbnail (ImageIO) so only the small bitmap is held in
+        // memory — the full image is never fully decoded for the grid.
+        let maxPixel = side * (UIScreen.main.scale)
+        let thumb = Self.downsample(data, maxPixel: maxPixel) ?? UIImage(data: data)
+        guard let thumb else { return }
         ImageCache.shared.set(thumb, for: key)
         image = thumb
+    }
+
+    /// Decode `data` to a UIImage no larger than `maxPixel` on its longest side without
+    /// decoding the full-resolution bitmap into memory.
+    static func downsample(_ data: Data, maxPixel: CGFloat) -> UIImage? {
+        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: max(maxPixel, 1),
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+        return UIImage(cgImage: cgImage)
     }
 }
 
