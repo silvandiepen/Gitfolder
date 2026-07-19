@@ -165,8 +165,8 @@ private struct ConnectView: View {
     }
 }
 
-/// The home screen: boards (repos) the user has added. Tap to open; add more from the
-/// account. The set is saved locally.
+/// The home screen: all boards, grouped by the repo they live in. Tap a board to open
+/// it; add more repos (optionally rooted at a subfolder). The set is saved locally.
 private struct HomeView: View {
     @Environment(AppModel.self) private var model
     @State private var showAdd = false
@@ -175,35 +175,48 @@ private struct HomeView: View {
         Group {
             if model.addedRepos.isEmpty {
                 ContentUnavailableView {
-                    Label("No Boards", systemImage: "square.stack.3d.up.badge.a")
+                    Label("No Boards", systemImage: "square.stack.3d.up")
                 } description: {
-                    Text("Add a repository to manage its board.")
+                    Text("Add a repository to manage its boards.")
                 } actions: {
-                    Button("Add Board") { showAdd = true }.buttonStyle(.borderedProminent)
+                    Button("Add Repository") { showAdd = true }.buttonStyle(.borderedProminent)
                 }
             } else {
                 List {
                     ForEach(model.addedRepos) { ref in
-                        Button {
-                            Task { await model.openRepo(ref) }
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: "square.stack.3d.up.fill")
-                                    .font(.title3).foregroundStyle(.tint).frame(width: 26)
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(ref.name).font(.body).foregroundStyle(.primary)
-                                    Text(ref.namespace).font(.caption).foregroundStyle(.secondary)
+                        Section {
+                            if let boards = model.homeBoards[ref.id] {
+                                if boards.isEmpty {
+                                    Text("No boards found here").font(.callout).foregroundStyle(.secondary)
+                                } else {
+                                    ForEach(boards) { project in
+                                        Button {
+                                            Task { await model.openBoard(ref, project: project) }
+                                        } label: {
+                                            HStack(spacing: 12) {
+                                                Image(systemName: "square.stack.3d.up.fill")
+                                                    .font(.title3).foregroundStyle(.tint).frame(width: 26)
+                                                Text(project.name).font(.body).foregroundStyle(.primary)
+                                                Spacer()
+                                                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                                            }
+                                            .contentShape(Rectangle())
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
                                 }
-                                Spacer()
-                                if ref.isPrivate { Image(systemName: "lock.fill").font(.caption).foregroundStyle(.tertiary) }
-                                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                            } else {
+                                HStack(spacing: 8) { ProgressView().controlSize(.small); Text("Loading boards…").foregroundStyle(.secondary) }
                             }
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .swipeActions(edge: .trailing) {
-                            Button(role: .destructive) { model.removeAddedRepo(ref) } label: {
-                                Label("Remove", systemImage: "minus.circle")
+                        } header: {
+                            HStack(spacing: 6) {
+                                Image(systemName: ref.isPrivate ? "lock.fill" : "book.closed").font(.caption2)
+                                Text(ref.path.isEmpty ? ref.fullName : "\(ref.fullName) / \(ref.path)").textCase(nil)
+                                Spacer()
+                                Button(role: .destructive) { model.removeAddedRepo(ref) } label: {
+                                    Image(systemName: "minus.circle")
+                                }
+                                .buttonStyle(.plain).foregroundStyle(.red)
                             }
                         }
                     }
@@ -224,38 +237,47 @@ private struct HomeView: View {
             ToolbarItem(placement: .topBarLeading) {
                 Menu {
                     if let login = model.connection?.login { Text("Signed in as \(login)") }
+                    Button("Refresh Boards") { Task { model.homeBoards = [:]; await model.loadHomeBoards() } }
                     Button("Sign Out", role: .destructive) { model.signOut() }
                 } label: { Image(systemName: "person.crop.circle") }
             }
         }
+        .task { await model.loadHomeBoards() }
         .sheet(isPresented: $showAdd) {
             NavigationStack { AddBoardView() }.environment(model)
         }
     }
 }
 
-/// Pick a repository from the account to add as a board. Excludes already-added repos.
+/// Pick a repository from the account to add. Optionally root it at a subfolder (e.g.
+/// `project-assets/Tasks`) where the boards live.
 private struct AddBoardView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
+    @State private var path = ""
 
     private var available: [GitRepository] {
-        let added = Set(model.addedRepos.map(\.id))
-        let notAdded = model.repos.filter { !added.contains(model.fullName($0)) }
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !q.isEmpty else { return notAdded }
-        return notAdded.filter { model.fullName($0).lowercased().contains(q) }
+        guard !q.isEmpty else { return model.repos }
+        return model.repos.filter { model.fullName($0).lowercased().contains(q) }
     }
 
     var body: some View {
-        Group {
-            if model.isLoadingRepos && model.repos.isEmpty {
-                ProgressView("Loading repositories…")
-            } else {
-                List(available, id: \.reference) { repo in
+        Form {
+            Section {
+                TextField("Subfolder (optional, e.g. project-assets/Tasks)", text: $path)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+            } footer: {
+                Text("Leave empty to use the repo root. Applies to the repository you pick next.")
+            }
+            Section("Repository") {
+                if model.isLoadingRepos && model.repos.isEmpty {
+                    HStack { ProgressView(); Text("Loading…").foregroundStyle(.secondary) }
+                }
+                ForEach(available, id: \.reference) { repo in
                     Button {
-                        Task { await model.addRepo(repo); dismiss() }
+                        Task { await model.addRepo(repo, path: path); dismiss() }
                     } label: {
                         HStack(spacing: 10) {
                             Image(systemName: repo.isPrivate ? "lock.fill" : "book.closed").foregroundStyle(.secondary)
@@ -267,11 +289,11 @@ private struct AddBoardView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                .searchable(text: $query, prompt: "Filter repositories")
-                .refreshable { await model.loadRepos() }
             }
         }
-        .navigationTitle("Add Board")
+        .searchable(text: $query, prompt: "Filter repositories")
+        .refreshable { await model.loadRepos() }
+        .navigationTitle("Add Repository")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
         .task { if model.repos.isEmpty { await model.loadRepos() } }

@@ -18,6 +18,14 @@ struct GitPontFileSource: BoardFileSource {
     private let context: GitProviderRequestContext
     private let repository: GitRepositoryReference
     private let ref: String
+    /// A subfolder the source is rooted at; all paths are relative to it.
+    private let basePath: String
+
+    /// Prefix a source-relative path with the base folder to get the real repo path.
+    private func full(_ path: String) -> String {
+        guard !basePath.isEmpty else { return path }
+        return path.isEmpty ? basePath : "\(basePath)/\(path)"
+    }
 
     init(
         provider: any GitProvider,
@@ -25,9 +33,11 @@ struct GitPontFileSource: BoardFileSource {
         owner: String,
         repo: String,
         branch: String,
-        token: String
+        token: String,
+        basePath: String = ""
     ) {
         self.provider = provider
+        self.basePath = basePath.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
         let now = Date()
         let connection = GitConnection(
             id: "gitkanban",
@@ -58,19 +68,22 @@ struct GitPontFileSource: BoardFileSource {
     }
 
     func list(_ directory: String) async throws -> [BoardFileEntry] {
-        let reference = GitFileReference(repository: repository, path: directory, ref: ref)
+        let reference = GitFileReference(repository: repository, path: full(directory), ref: ref)
         let result = try await provider.listDirectory(reference, context: context)
         return result.items.map { entry in
-            BoardFileEntry(
+            // Keep returned paths source-relative (relative to basePath) so callers can
+            // feed them straight back to list/readText.
+            let relative = directory.isEmpty ? entry.name : "\(directory)/\(entry.name)"
+            return BoardFileEntry(
                 name: entry.name,
-                path: entry.path,
+                path: relative,
                 kind: entry.type == .directory ? .directory : .file
             )
         }
     }
 
     func readText(_ path: String) async throws -> String {
-        let reference = GitFileReference(repository: repository, path: path, ref: ref)
+        let reference = GitFileReference(repository: repository, path: full(path), ref: ref)
         let file = try await provider.readFile(reference, context: context)
         guard let text = String(data: file.content, encoding: .utf8) else {
             throw GitPontError.invalidProviderResponse("File is not UTF-8: \(path)")
@@ -83,7 +96,7 @@ struct GitPontFileSource: BoardFileSource {
     /// Create or overwrite a file with `text` in one commit (last-writer-wins).
     func write(path: String, text: String, message: String) async throws {
         let change = GitFileChange(
-            reference: GitFileReference(repository: repository, path: path, ref: ref),
+            reference: GitFileReference(repository: repository, path: full(path), ref: ref),
             content: Data(text.utf8),
             message: message,
             targetBranch: ref,
@@ -95,7 +108,7 @@ struct GitPontFileSource: BoardFileSource {
     /// Delete a file in one commit. Fetches the current version first (providers that
     /// require the blob sha to delete), falling back to a blind delete.
     func delete(path: String, message: String) async throws {
-        let reference = GitFileReference(repository: repository, path: path, ref: ref)
+        let reference = GitFileReference(repository: repository, path: full(path), ref: ref)
         let version = try? await provider.readFile(reference, context: context).version
         let request = GitFileDeleteRequest(
             reference: reference,

@@ -7,7 +7,12 @@ struct RepoRef: Codable, Identifiable, Hashable {
     var name: String
     var branch: String
     var isPrivate: Bool
+    /// Optional subfolder within the repo where the boards live (e.g. "project-assets/Tasks").
+    var path: String = ""
 
     var fullName: String { "\(namespace)/\(name)" }
-    var id: String { fullName }
+    /// Distinct per repo + subpath, so the same repo can be added at different paths.
+    var id: String { path.isEmpty ? fullName : "\(fullName)#\(path)" }
+    /// A short label for the board's location.
+    var displayName: String { path.isEmpty ? name : "\(name)/\(path)" }
 }

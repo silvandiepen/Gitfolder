@@ -156,25 +156,30 @@ final class AppModel {
         addedRepos = saved
     }
 
-    /// Add a board (repo) to the home list and open it.
-    func addRepo(_ repo: GitRepository) async {
+    /// Add a repo (optionally rooted at a subfolder) to the home list and load its
+    /// boards. Does not auto-open — the home then lists its boards grouped by repo.
+    func addRepo(_ repo: GitRepository, path: String = "") async {
+        let clean = path.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
         let ref = RepoRef(
             namespace: repo.reference.namespace,
             name: repo.reference.name,
             branch: repo.reference.defaultBranch ?? "main",
-            isPrivate: repo.isPrivate
+            isPrivate: repo.isPrivate,
+            path: clean
         )
         if !addedRepos.contains(where: { $0.id == ref.id }) {
             addedRepos.append(ref)
-            addedRepos.sort { $0.fullName.localizedCaseInsensitiveCompare($1.fullName) == .orderedAscending }
+            addedRepos.sort { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
             persistAddedRepos()
         }
-        await openRepo(ref)
+        homeBoards[ref.id] = nil
+        await loadHomeBoards()
     }
 
-    /// Remove a board from the home list. If it's open, return home.
+    /// Remove a repo from the home list. If a board from it is open, return home.
     func removeAddedRepo(_ ref: RepoRef) {
         addedRepos.removeAll { $0.id == ref.id }
+        homeBoards[ref.id] = nil
         persistAddedRepos()
         if activeRepo?.id == ref.id { closeRepo() }
     }
@@ -313,6 +318,7 @@ final class AppModel {
         connection = nil
         repos = []
         addedRepos = []
+        homeBoards = [:]
         activeRepo = nil
         workspace = nil
         selectedProject = nil
@@ -356,9 +362,44 @@ final class AppModel {
             owner: ref.namespace,
             repo: ref.name,
             branch: ref.branch,
-            token: connection.token
+            token: connection.token,
+            basePath: ref.path
         )
         await loadWorkspaceAndFirstProject()
+    }
+
+    /// Open a specific board (project) within a repo.
+    func openBoard(_ ref: RepoRef, project: BoardProject) async {
+        if activeRepo?.id != ref.id {
+            await openRepo(ref)
+        }
+        if let match = workspace?.projects.first(where: { $0.folder == project.folder }) {
+            await selectProject(match)
+        }
+    }
+
+    // MARK: - Home (boards grouped by repo)
+
+    /// Cached project lists per added repo (repo id → boards), for the grouped home.
+    var homeBoards: [String: [BoardProject]] = [:]
+    var isLoadingHome = false
+
+    /// Load each added repo's workspace so the home can list boards grouped by repo.
+    func loadHomeBoards() async {
+        guard let connection else { return }
+        isLoadingHome = true
+        defer { isLoadingHome = false }
+        for ref in addedRepos where homeBoards[ref.id] == nil {
+            let source = GitPontFileSource(
+                provider: connection.provider, instance: connection.instance,
+                owner: ref.namespace, repo: ref.name, branch: ref.branch,
+                token: connection.token, basePath: ref.path)
+            if let workspace = try? await RemoteBoardStore.loadWorkspace(source: source) {
+                homeBoards[ref.id] = workspace.projects
+            } else {
+                homeBoards[ref.id] = []
+            }
+        }
     }
 
     /// Load the offline in-memory demo board — explore the app without connecting.
@@ -576,7 +617,8 @@ final class AppModel {
     /// The github.com blob URL for a card's file (Copy Link / Open on GitHub).
     func githubURL(for card: Card) -> URL? {
         guard connection?.choice == .github, let ref = activeRepo, let location = location(of: card) else { return nil }
-        let encoded = location.path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? location.path
+        let repoPath = ref.path.isEmpty ? location.path : "\(ref.path)/\(location.path)"
+        let encoded = repoPath.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? repoPath
         return URL(string: "https://github.com/\(ref.namespace)/\(ref.name)/blob/\(ref.branch)/\(encoded)")
     }
 
