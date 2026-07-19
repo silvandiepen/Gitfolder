@@ -19,6 +19,7 @@ struct ProjectSheet: View {
     @State private var typeItems: [TextItem] = []
     @State private var epicItems: [EpicItem] = []
     @State private var seeded = false
+    @State private var detecting = false
 
     private var isEditing: Bool { editing != nil }
     private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -67,6 +68,21 @@ struct ProjectSheet: View {
                 Section("Project") {
                     TextField("Name", text: $name)
                     TextField("Description (optional)", text: $description, axis: .vertical).lineLimit(1...4)
+                }
+
+                if isEditing {
+                    Section {
+                        Button { detect() } label: {
+                            HStack {
+                                Label("Detect from Folders", systemImage: "wand.and.stars")
+                                Spacer()
+                                if detecting { ProgressView() }
+                            }
+                        }
+                        .disabled(detecting)
+                    } footer: {
+                        Text("Read the board's folders and cards to fill in lanes, priorities, types, members, and epics. Lanes come from the subfolders; each keeps its folder + status.")
+                    }
                 }
 
                 Section {
@@ -175,6 +191,39 @@ struct ProjectSheet: View {
         memberItems = config.users.map { TextItem(text: $0.id) }
         typeItems = config.types.map { TextItem(text: $0) }
         epicItems = config.epics.map { EpicItem(name: $0.name ?? $0.id, origin: $0) }
+    }
+
+    /// Read the board's folders + cards and fill the form (lanes from subfolders, vocab merged).
+    private func detect() {
+        guard let editing, !detecting else { return }
+        detecting = true
+        Task {
+            let d = await model.detectConfig(for: editing)
+            applyDetected(d)
+            detecting = false
+        }
+    }
+
+    /// Apply a detected config: replace lanes (folders are the source of truth), merge vocab.
+    private func applyDetected(_ d: DetectedBoardConfig) {
+        if !d.lanes.isEmpty {
+            laneItems = d.lanes.map { LaneItem(name: $0.name, origin: $0) }
+        }
+        for p in d.priorities where !priorityItems.contains(where: { $0.text.caseInsensitiveCompare(p.id) == .orderedSame }) {
+            priorityItems.append(TextItem(text: p.id))
+        }
+        for u in d.users where !memberItems.contains(where: { $0.text.caseInsensitiveCompare(u.id) == .orderedSame }) {
+            memberItems.append(TextItem(text: u.id))
+        }
+        for t in d.types where !typeItems.contains(where: { $0.text.caseInsensitiveCompare(t) == .orderedSame }) {
+            typeItems.append(TextItem(text: t))
+        }
+        for e in d.epics {
+            let label = e.name ?? e.id
+            if !epicItems.contains(where: { ($0.origin?.id ?? "") == e.id || $0.name.caseInsensitiveCompare(label) == .orderedSame }) {
+                epicItems.append(EpicItem(name: label, origin: e))
+            }
+        }
     }
 
     private func save() async {
