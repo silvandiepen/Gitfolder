@@ -8,6 +8,8 @@ import UIKit
 /// or search. Edits commit over the provider API (git-pont) and reload.
 struct BoardScreen: View {
     @Environment(AppModel.self) private var model
+    @State private var showNewProject = false
+    @State private var settingsProject: BoardProject?
 
     private var projects: [BoardProject] { model.workspace?.projects ?? [] }
 
@@ -33,6 +35,8 @@ struct BoardScreen: View {
         .sheet(item: $model.selectedCard) { card in CardDetailSheet(card: card).environment(model) }
         .sheet(item: $model.newTaskLane) { lane in NewTaskSheet(lane: lane).environment(model) }
         .sheet(isPresented: $model.isShowingSearch) { SearchSheet().environment(model) }
+        .sheet(isPresented: $showNewProject) { ProjectSheet(editing: nil).environment(model) }
+        .sheet(item: $settingsProject) { project in ProjectSheet(editing: project).environment(model) }
     }
 
     @ViewBuilder private var savingBanner: some View {
@@ -52,9 +56,21 @@ struct BoardScreen: View {
         }
         ToolbarItemGroup(placement: .topBarTrailing) {
             if model.boardViewMode == .list { EditButton() }
+            projectMenu
             layoutMenu
             Button { model.isShowingSearch = true } label: { Image(systemName: "magnifyingglass") }
             filterMenu
+        }
+    }
+
+    private var projectMenu: some View {
+        Menu {
+            Button("New Project…", systemImage: "plus") { showNewProject = true }
+            if let project = model.selectedProject {
+                Button("Project Settings…", systemImage: "gearshape") { settingsProject = project }
+            }
+        } label: {
+            Image(systemName: "folder")
         }
     }
 

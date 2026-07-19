@@ -413,6 +413,68 @@ final class AppModel {
         defaults.removeObject(forKey: activeRepoKey)
     }
 
+    // MARK: - Projects (board settings)
+
+    /// Default 5 lanes for a new project.
+    static func defaultProjectLanes() -> [Lane] {
+        lanes(fromNames: ["To do", "In Progress", "In Review", "Testing", "Done"], terminalLast: true)
+    }
+    static func defaultPriorities() -> [Priority] { (0...3).map { Priority(id: "P\($0)") } }
+
+    /// Build lanes from display names: folder = "<n>. <name>", id/status = slug.
+    static func lanes(fromNames names: [String], terminalLast: Bool = false) -> [Lane] {
+        let cleaned = names.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        return cleaned.enumerated().map { index, name in
+            let slug = name.lowercased().replacingOccurrences(of: " ", with: "-")
+            return Lane(id: slug, name: name, folder: "\(index + 1). \(name)", status: slug,
+                        terminal: (terminalLast && index == cleaned.count - 1) ? true : nil)
+        }
+    }
+
+    /// Create a project: write its README config (one commit). Lanes render from config,
+    /// so empty lane folders aren't needed — they're created on the first task add.
+    func createProject(name rawName: String, description: String, lanes: [Lane],
+                       priorities: [Priority], users: [User], epics: [Epic]) async {
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let source else { return }
+        guard !name.isEmpty, !name.contains("/"), !name.contains("\\") else {
+            errorMessage = "A project needs a name without slashes."; return
+        }
+        let readme = BoardStore.renderProjectReadme(
+            name: name, description: description, lanes: lanes,
+            priorities: priorities, users: users, types: [], epics: epics)
+        isSaving = true; errorMessage = nil
+        do { try await source.write(path: "\(name)/README.md", text: readme, message: "Create project \(name)") }
+        catch { errorMessage = error.localizedDescription }
+        isSaving = false
+        await reloadWorkspace(selecting: name)
+    }
+
+    /// Save a project's settings by rewriting its README config (one commit).
+    func saveProjectSettings(project: BoardProject, name: String, description: String, lanes: [Lane],
+                            priorities: [Priority], users: [User], types: [String], epics: [Epic]) async {
+        guard let source else { return }
+        let readme = BoardStore.renderProjectReadme(
+            name: name, description: description, lanes: lanes,
+            priorities: priorities, users: users, types: types, epics: epics)
+        isSaving = true; errorMessage = nil
+        do { try await source.write(path: "\(project.folder)/README.md", text: readme, message: "Update \(name) settings") }
+        catch { errorMessage = error.localizedDescription }
+        isSaving = false
+        await reloadWorkspace(selecting: project.folder)
+    }
+
+    /// Reload the workspace and select the project with the given folder (or the first).
+    private func reloadWorkspace(selecting folder: String) async {
+        guard let source else { return }
+        do {
+            let workspace = try await RemoteBoardStore.loadWorkspace(source: source)
+            self.workspace = workspace
+            let project = workspace.projects.first { $0.folder == folder } ?? workspace.projects.first
+            if let project { await selectProject(project) }
+        } catch { errorMessage = error.localizedDescription }
+    }
+
     // MARK: - Writes (over the provider API via git-pont)
 
     func createTask(
