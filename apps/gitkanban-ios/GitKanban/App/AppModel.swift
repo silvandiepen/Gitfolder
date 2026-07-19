@@ -164,21 +164,100 @@ final class AppModel {
             provider = GitLabProvider(httpClient: URLSessionHTTPClient(), instances: [instance])
         }
 
+        await establish(choice: choice, instance: instance, provider: provider, token: token, serverURL: rawServerURL, persist: persist)
+    }
+
+    /// Validate a token/credential against a provider, set the active connection,
+    /// persist it, and load repositories. Shared by the token and OAuth connect paths.
+    private func establish(
+        choice: ProviderChoice, instance: GitProviderInstance, provider: any GitProvider,
+        token: String, serverURL: String?, persist: Bool
+    ) async {
         do {
             let account = try await provider.account(instance: instance, credential: GitCredential(accessToken: token))
-            let connection = ProviderConnection(
+            connection = ProviderConnection(
                 choice: choice, instance: instance, provider: provider, token: token, login: account.login
             )
-            self.connection = connection
             if persist {
                 try? keychain.save(token)
-                let stored = StoredConnection(choice: choice, serverURL: rawServerURL)
+                let stored = StoredConnection(choice: choice, serverURL: serverURL)
                 if let data = try? JSONEncoder().encode(stored) { defaults.set(data, forKey: connectionKey) }
             }
             await loadRepos()
         } catch {
             errorMessage = "Could not connect: \(error.localizedDescription)"
         }
+    }
+
+    // MARK: - GitHub OAuth (device flow)
+
+    /// The active GitHub device-flow session (user code + verification URL) while the
+    /// user authorises in a browser. Non-nil means the Connect screen shows the code.
+    var deviceAuth: GitOAuthDeviceSession?
+
+    @ObservationIgnored private let gitHubOAuthConfig = OAuthAppConfig(
+        clientID: "Ov23li24tWFt7qLuLqCe", scopes: ["repo"]
+    )
+
+    /// Begin GitHub sign-in with the OAuth device flow: request a user code, surface it
+    /// for the browser, then poll until the user authorises.
+    func startGitHubOAuth() async {
+        errorMessage = nil
+        isConnecting = true
+        let provider = GitHubProvider(httpClient: URLSessionHTTPClient(), oauth: gitHubOAuthConfig)
+        do {
+            let result = try await provider.startOAuth(GitOAuthStartRequest(
+                instance: .github, method: .oauthDevice, appConfig: gitHubOAuthConfig))
+            guard case let .device(session) = result else {
+                errorMessage = "Unexpected OAuth response from GitHub."
+                isConnecting = false
+                return
+            }
+            deviceAuth = session
+            await pollGitHubOAuth(provider: provider, session: session)
+        } catch {
+            errorMessage = "Could not start sign-in: \(error.localizedDescription)"
+            isConnecting = false
+        }
+    }
+
+    func cancelOAuth() {
+        deviceAuth = nil
+        isConnecting = false
+    }
+
+    private func pollGitHubOAuth(provider: GitHubProvider, session: GitOAuthDeviceSession) async {
+        var interval = max(session.interval, 5)
+        while Date() < session.expiresAt {
+            try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+            if deviceAuth == nil { return } // cancelled by the user
+            do {
+                let credential = try await provider.completeOAuth(GitOAuthCompletionRequest(
+                    instance: .github, method: .oauthDevice, appConfig: gitHubOAuthConfig,
+                    deviceCode: session.deviceCode))
+                deviceAuth = nil
+                await establish(choice: .github, instance: .github, provider: provider,
+                                token: credential.accessToken, serverURL: nil, persist: true)
+                isConnecting = false
+                return
+            } catch GitPontError.authenticationFailed(let message) {
+                let m = message.lowercased()
+                if m.contains("slow") { interval += 5 }
+                if m.contains("denied") || m.contains("declined") { finishOAuth(error: "Sign-in was declined on GitHub."); return }
+                if m.contains("expired") { finishOAuth(error: "The code expired. Please try again."); return }
+                continue  // authorization_pending / transient: keep waiting
+            } catch {
+                continue  // transient (e.g. network) — keep the screen and poll again
+            }
+        }
+        finishOAuth(error: "Sign-in timed out. Please try again.")
+    }
+
+    private func finishOAuth(error: String) {
+        guard deviceAuth != nil else { return }
+        deviceAuth = nil
+        isConnecting = false
+        errorMessage = error
     }
 
     func signOut() {
