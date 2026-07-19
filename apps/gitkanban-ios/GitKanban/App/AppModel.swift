@@ -417,16 +417,17 @@ final class AppModel {
 
     func createTask(
         title rawTitle: String, lane: Lane,
-        priority: String?, type: String?, assignee: String?, body: String
+        priority: String?, type: String?, assignee: String?, epic: String? = nil, body: String
     ) async {
         let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let source, let project = selectedProject, !title.isEmpty, !lane.folder.isEmpty else { return }
         let id = uniqueID(for: title, lane: lane)
         let path = "\(project.folder)/\(lane.folder)/\(id).md"
-        let content = CardText.make(
+        var content = CardText.make(
             id: id, title: title, project: project.name, status: lane.status,
             priority: priority, type: type, assignee: assignee, body: body
         )
+        if let epic, !epic.isEmpty { content = CardText.update(content, set: ["epic": epic]) }
         await performWrite { try await source.write(path: path, text: content, message: "Add task \(id)") }
     }
 
@@ -464,7 +465,7 @@ final class AppModel {
 
     func updateCard(
         _ card: Card, title: String, laneID: String,
-        priority: String, type: String, assignee: String, body: String
+        priority: String, type: String, assignee: String, epic: String = "", body: String
     ) async {
         guard let source, let project = selectedProject,
               let location = location(of: card), let fileName = card.fileName else { return }
@@ -476,6 +477,7 @@ final class AppModel {
             "priority": priority.isEmpty ? nil : priority,
             "type": type.isEmpty ? nil : type,
             "assignee": assignee.isEmpty ? nil : assignee,
+            "epic": epic.isEmpty ? nil : epic,
         ], body: body)
         let moved = lane.id != location.lane.id
         let newPath = moved ? "\(project.folder)/\(lane.folder)/\(fileName)" : location.path
@@ -488,6 +490,32 @@ final class AppModel {
     func deleteCard(_ card: Card) async {
         guard let source, let location = location(of: card) else { return }
         await performWrite { try await source.delete(path: location.path, message: "Delete \(card.fields.id)") }
+    }
+
+    /// Update one or more frontmatter fields on a card in place (no lane move).
+    func setCardField(_ card: Card, _ updates: [String: String?]) async {
+        guard let source, let location = location(of: card) else { return }
+        let original = (try? await source.readText(location.path)) ?? card.body
+        let updated = CardText.update(original, set: updates)
+        await performWrite { try await source.write(path: location.path, text: updated, message: "Update \(card.fields.id)") }
+    }
+
+    /// Duplicate a card into the same lane with a fresh id.
+    func duplicateCard(_ card: Card) async {
+        guard let source, let project = selectedProject, let location = location(of: card) else { return }
+        let original = (try? await source.readText(location.path)) ?? card.body
+        let base = card.fields.title.isEmpty ? "task" : card.fields.title
+        let newID = uniqueID(for: base, lane: location.lane)
+        let newPath = "\(project.folder)/\(location.lane.folder)/\(newID).md"
+        let content = CardText.update(original, set: ["id": newID])
+        await performWrite { try await source.write(path: newPath, text: content, message: "Duplicate \(card.fields.id)") }
+    }
+
+    /// The github.com blob URL for a card's file (Copy Link / Open on GitHub).
+    func githubURL(for card: Card) -> URL? {
+        guard connection?.choice == .github, let ref = activeRepo, let location = location(of: card) else { return nil }
+        let encoded = location.path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? location.path
+        return URL(string: "https://github.com/\(ref.namespace)/\(ref.name)/blob/\(ref.branch)/\(encoded)")
     }
 
     /// Persist a new within-lane order by rewriting each card's `order` frontmatter.

@@ -1,5 +1,6 @@
 import GitKit
 import SwiftUI
+import UIKit
 
 /// The board for the active project, in either **lanes** (horizontal kanban) or
 /// **list** mode. Backlog lanes are ordered last. Tap a card for its detail (rendered
@@ -279,6 +280,7 @@ private struct ListBoardView: View {
                                 CardRow(card: card, priorities: model.board?.config.priorities ?? [])
                             }
                             .buttonStyle(.plain)
+                            .contextMenu { cardMenu(card, model: model) }
                         }
                         .onMove { indices, newOffset in
                             guard !column.lane.folder.isEmpty, !model.hasActiveFilters else { return }
@@ -348,16 +350,70 @@ struct CardRow: View {
 
 @MainActor @ViewBuilder
 func cardMenu(_ card: Card, model: AppModel) -> some View {
-    Button("Open") { model.selectedCard = card }
-    if let lanes = model.board?.config.lanes, !lanes.isEmpty {
-        Menu("Move to") {
-            ForEach(lanes, id: \.id) { lane in
-                Button(lane.name) { Task { await model.moveCard(card, to: lane) } }
+    let config = model.board?.config ?? EffectiveConfig()
+
+    Button("Open", systemImage: "arrow.up.forward.square") { model.selectedCard = card }
+    Divider()
+
+    if !config.lanes.isEmpty {
+        Menu("Move to", systemImage: "arrow.left.arrow.right") {
+            ForEach(config.lanes, id: \.id) { lane in
+                menuCheck(lane.name, card.fields.status == lane.status) {
+                    Task { await model.moveCard(card, to: lane) }
+                }
             }
         }
     }
+    if !config.priorities.isEmpty {
+        Menu("Priority", systemImage: "flag") {
+            menuCheck("None", card.fields.priority == nil) { Task { await model.setCardField(card, ["priority": nil]) } }
+            ForEach(config.priorities, id: \.id) { p in
+                menuCheck(p.name ?? p.id, card.fields.priority == p.id) { Task { await model.setCardField(card, ["priority": p.id]) } }
+            }
+        }
+    }
+    if !config.users.isEmpty {
+        Menu("Assignee", systemImage: "person.crop.circle") {
+            menuCheck("Unassigned", card.fields.assignee == nil) { Task { await model.setCardField(card, ["assignee": nil]) } }
+            ForEach(config.users, id: \.id) { u in
+                menuCheck(u.name ?? u.id, card.fields.assignee == u.id) { Task { await model.setCardField(card, ["assignee": u.id]) } }
+            }
+        }
+    }
+    if !config.types.isEmpty {
+        Menu("Type", systemImage: "tag") {
+            menuCheck("None", card.fields.type == nil) { Task { await model.setCardField(card, ["type": nil]) } }
+            ForEach(config.types, id: \.self) { t in
+                menuCheck(t, card.fields.type == t) { Task { await model.setCardField(card, ["type": t]) } }
+            }
+        }
+    }
+    if !config.epics.isEmpty {
+        Menu("Epic", systemImage: "square.stack.3d.up") {
+            menuCheck("None", card.fields.epic == nil) { Task { await model.setCardField(card, ["epic": nil]) } }
+            ForEach(config.epics, id: \.id) { e in
+                menuCheck(e.name ?? e.id, card.fields.epic == e.id) { Task { await model.setCardField(card, ["epic": e.id]) } }
+            }
+        }
+    }
+
     Divider()
-    Button("Delete", role: .destructive) { Task { await model.deleteCard(card) } }
+    Button("Duplicate", systemImage: "plus.square.on.square") { Task { await model.duplicateCard(card) } }
+    if let url = model.githubURL(for: card) {
+        Button("Copy Link", systemImage: "link") { UIPasteboard.general.url = url }
+        Button("Open on GitHub", systemImage: "safari") { UIApplication.shared.open(url) }
+    }
+    Button("Copy ID", systemImage: "number") { UIPasteboard.general.string = card.fields.id }
+
+    Divider()
+    Button("Delete", systemImage: "trash", role: .destructive) { Task { await model.deleteCard(card) } }
+}
+
+@ViewBuilder
+private func menuCheck(_ text: String, _ selected: Bool, _ action: @escaping () -> Void) -> some View {
+    Button(action: action) {
+        if selected { Label(text, systemImage: "checkmark") } else { Text(text) }
+    }
 }
 
 // MARK: - Colours (local to iOS)

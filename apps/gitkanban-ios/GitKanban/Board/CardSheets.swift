@@ -18,6 +18,7 @@ struct CardDetailSheet: View {
     @State private var priority = ""
     @State private var type = ""
     @State private var assignee = ""
+    @State private var epic = ""
     @State private var body_ = ""
     @State private var seeded = false
 
@@ -26,6 +27,7 @@ struct CardDetailSheet: View {
     private var priorities: [Priority] { config?.priorities ?? [] }
     private var users: [User] { config?.users ?? [] }
     private var types: [String] { config?.types ?? [] }
+    private var epics: [Epic] { config?.epics ?? [] }
 
     private var laneForStatus: Lane? { lanes.first { $0.status == card.fields.status } }
 
@@ -83,6 +85,9 @@ struct CardDetailSheet: View {
                 chip(p, color: color)
             }
             if let t = card.fields.type { chip(t, color: .secondary) }
+            if let e = card.fields.epic {
+                chip(epics.first { $0.id == e }?.name ?? e, color: .purple)
+            }
             if let a = card.fields.assignee {
                 Label("@\(a)", systemImage: "person.crop.circle").labelStyle(.titleOnly)
                     .font(.caption).foregroundStyle(.secondary)
@@ -140,6 +145,12 @@ struct CardDetailSheet: View {
                         ForEach(users, id: \.id) { Text($0.name ?? $0.id).tag($0.id) }
                     }
                 }
+                if !epics.isEmpty {
+                    Picker("Epic", selection: $epic) {
+                        Text("None").tag("")
+                        ForEach(epics, id: \.id) { Text($0.name ?? $0.id).tag($0.id) }
+                    }
+                }
             }
             Section("Description") {
                 TextEditor(text: $body_).frame(minHeight: 160)
@@ -156,7 +167,7 @@ struct CardDetailSheet: View {
             Button("Save") {
                 Task {
                     await model.updateCard(card, title: title, laneID: laneID, priority: priority,
-                                           type: type, assignee: assignee, body: body_)
+                                           type: type, assignee: assignee, epic: epic, body: body_)
                     dismiss()
                 }
             }
@@ -172,6 +183,7 @@ struct CardDetailSheet: View {
         priority = card.fields.priority ?? ""
         type = card.fields.type ?? ""
         assignee = card.fields.assignee ?? ""
+        epic = card.fields.epic ?? ""
         body_ = card.body.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
@@ -186,12 +198,14 @@ struct NewTaskSheet: View {
     @State private var priority = ""
     @State private var type = ""
     @State private var assignee = ""
+    @State private var epic = ""
     @State private var body_ = ""
 
     private var config: EffectiveConfig? { model.board?.config }
     private var priorities: [Priority] { config?.priorities ?? [] }
     private var users: [User] { config?.users ?? [] }
     private var types: [String] { config?.types ?? [] }
+    private var epics: [Epic] { config?.epics ?? [] }
 
     var body: some View {
         NavigationStack {
@@ -220,6 +234,12 @@ struct NewTaskSheet: View {
                             ForEach(users, id: \.id) { Text($0.name ?? $0.id).tag($0.id) }
                         }
                     }
+                    if !epics.isEmpty {
+                        Picker("Epic", selection: $epic) {
+                            Text("None").tag("")
+                            ForEach(epics, id: \.id) { Text($0.name ?? $0.id).tag($0.id) }
+                        }
+                    }
                 }
                 Section("Description") { TextEditor(text: $body_).frame(minHeight: 120) }
             }
@@ -235,6 +255,7 @@ struct NewTaskSheet: View {
                                 priority: priority.isEmpty ? nil : priority,
                                 type: type.isEmpty ? nil : type,
                                 assignee: assignee.isEmpty ? nil : assignee,
+                                epic: epic.isEmpty ? nil : epic,
                                 body: body_
                             )
                             dismiss()
