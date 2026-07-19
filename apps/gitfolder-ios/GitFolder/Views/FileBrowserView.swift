@@ -257,7 +257,7 @@ struct DirectoryView: View {
                 Button { model.closeRepo() } label: {
                     HStack(spacing: 3) {
                         Image(systemName: "chevron.backward")
-                        Text("Repos")
+                        Text("Repositories")
                     }
                 }
             }
