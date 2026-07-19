@@ -22,9 +22,7 @@ struct ImageViewerView: View {
             } else if let loadError {
                 ContentUnavailableView("Couldn't open image", systemImage: "photo.badge.exclamationmark", description: Text(loadError))
             } else if let data {
-                if FileKind.isSVG(name) {
-                    SVGWebView(data: data)
-                } else if let image = UIImage(data: data) {
+                if let image = UIImage(data: data) {
                     ScrollView([.horizontal, .vertical]) {
                         Image(uiImage: image)
                             .resizable()
@@ -84,31 +82,6 @@ enum ImageKidBridge {
     static var isInstalled: Bool {
         guard let url = URL(string: "imagekid://") else { return false }
         return UIApplication.shared.canOpenURL(url)
-    }
-}
-
-/// Renders SVG data in a WKWebView, scaled to fit.
-private struct SVGWebView: UIViewRepresentable {
-    let data: Data
-
-    func makeUIView(context: Context) -> WKWebView {
-        let webView = WKWebView()
-        webView.isOpaque = false
-        webView.backgroundColor = .clear
-        webView.scrollView.backgroundColor = .clear
-        return webView
-    }
-
-    func updateUIView(_ webView: WKWebView, context: Context) {
-        let svg = String(data: data, encoding: .utf8) ?? ""
-        let html = """
-        <!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=4">
-        <style>html,body{margin:0;height:100%;background:transparent}
-        .wrap{display:flex;align-items:center;justify-content:center;height:100vh;padding:12px;box-sizing:border-box}
-        svg,img{max-width:100%;max-height:100%;height:auto}</style></head>
-        <body><div class="wrap">\(svg)</div></body></html>
-        """
-        webView.loadHTMLString(html, baseURL: nil)
     }
 }
 

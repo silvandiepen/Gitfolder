@@ -18,10 +18,14 @@ struct RepoFileClient {
     let context: GitProviderRequestContext
     let repository: GitRepositoryReference
     let ref: String
+    let connection: ProviderConnection
+    let repoRef: RepoRef
 
     init(connection: ProviderConnection, ref repoRef: RepoRef) {
         self.provider = connection.provider
         self.context = connection.requestContext
+        self.connection = connection
+        self.repoRef = repoRef
         self.repository = GitRepositoryReference(
             instance: connection.instance,
             namespace: repoRef.namespace,
@@ -53,8 +57,35 @@ struct RepoFileClient {
         return text
     }
 
-    /// Read a file's raw bytes (for images and other binary content).
+    /// Read a file's raw bytes (for images and other binary content). git-pont's
+    /// contents path only handles small base64 files; fetch bytes directly from the
+    /// provider's raw endpoint so large/binary files (e.g. a 1024px app icon) work.
     func readData(_ path: String) async throws -> Data {
+        if connection.choice == .github {
+            var url = connection.instance.apiBaseURL
+                .appendingPathComponent("repos")
+                .appendingPathComponent(repoRef.namespace)
+                .appendingPathComponent(repoRef.name)
+                .appendingPathComponent("contents")
+            for segment in path.split(separator: "/") {
+                url = url.appendingPathComponent(String(segment))
+            }
+            var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            components?.queryItems = [URLQueryItem(name: "ref", value: ref)]
+            guard let requestURL = components?.url else {
+                throw GitPontError.invalidProviderResponse("Bad file URL for \(path)")
+            }
+            var request = URLRequest(url: requestURL)
+            request.setValue("Bearer \(connection.token)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/vnd.github.raw", forHTTPHeaderField: "Accept")
+            request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
+            let (data, response) = try await URLSession.shared.data(for: request)
+            if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+                throw GitPontError.invalidProviderResponse("HTTP \(http.statusCode) reading \(path)")
+            }
+            return data
+        }
+        // Other providers: fall back to git-pont's contents (base64, small files).
         let reference = GitFileReference(repository: repository, path: path, ref: ref)
         return try await provider.readFile(reference, context: context).content
     }
