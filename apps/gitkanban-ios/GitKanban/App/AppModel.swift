@@ -66,7 +66,10 @@ final class AppModel {
     var isLoadingRepos = false
 
     // MARK: Active board
-    var activeRepo: GitRepository?
+    /// Boards (repos) the user has added — shown on the home screen. Persisted.
+    var addedRepos: [RepoRef] = []
+    /// The open board's repo (nil = home list). Persisted so it reopens on launch.
+    var activeRepo: RepoRef?
     var workspace: Workspace?
     var selectedProject: BoardProject?
     var board: LoadedBoard?
@@ -118,6 +121,8 @@ final class AppModel {
     )
     @ObservationIgnored private let defaults = UserDefaults.standard
     @ObservationIgnored private let connectionKey = "gitkanban.connection"
+    @ObservationIgnored private let addedReposKey = "gitkanban.addedRepos"
+    @ObservationIgnored private let activeRepoKey = "gitkanban.activeRepo"
 
     @ObservationIgnored private var source: (any BoardWritable)?
     /// True when viewing the offline in-memory demo board (no provider connection).
@@ -127,11 +132,51 @@ final class AppModel {
 
     func restore() async {
         defer { isRestoring = false }
+        loadAddedRepos()
         guard let data = defaults.data(forKey: connectionKey),
               let stored = try? JSONDecoder().decode(StoredConnection.self, from: data),
               let token = ((try? keychain.load()) ?? nil)?.trimmingCharacters(in: .whitespacesAndNewlines),
               !token.isEmpty else { return }
         await connect(choice: stored.choice, serverURL: stored.serverURL, token: token, persist: false)
+        // Reopen the last board so relaunching lands where you left off.
+        if isConnected, let saved = defaults.string(forKey: activeRepoKey),
+           let ref = addedRepos.first(where: { $0.fullName == saved }) {
+            await openRepo(ref)
+        }
+    }
+
+    // MARK: - Boards (added repos)
+
+    private func persistAddedRepos() {
+        if let data = try? JSONEncoder().encode(addedRepos) { defaults.set(data, forKey: addedReposKey) }
+    }
+    private func loadAddedRepos() {
+        guard let data = defaults.data(forKey: addedReposKey),
+              let saved = try? JSONDecoder().decode([RepoRef].self, from: data) else { return }
+        addedRepos = saved
+    }
+
+    /// Add a board (repo) to the home list and open it.
+    func addRepo(_ repo: GitRepository) async {
+        let ref = RepoRef(
+            namespace: repo.reference.namespace,
+            name: repo.reference.name,
+            branch: repo.reference.defaultBranch ?? "main",
+            isPrivate: repo.isPrivate
+        )
+        if !addedRepos.contains(where: { $0.id == ref.id }) {
+            addedRepos.append(ref)
+            addedRepos.sort { $0.fullName.localizedCaseInsensitiveCompare($1.fullName) == .orderedAscending }
+            persistAddedRepos()
+        }
+        await openRepo(ref)
+    }
+
+    /// Remove a board from the home list. If it's open, return home.
+    func removeAddedRepo(_ ref: RepoRef) {
+        addedRepos.removeAll { $0.id == ref.id }
+        persistAddedRepos()
+        if activeRepo?.id == ref.id { closeRepo() }
     }
 
     // MARK: - Connect
@@ -263,8 +308,11 @@ final class AppModel {
     func signOut() {
         try? keychain.delete()
         defaults.removeObject(forKey: connectionKey)
+        defaults.removeObject(forKey: addedReposKey)
+        defaults.removeObject(forKey: activeRepoKey)
         connection = nil
         repos = []
+        addedRepos = []
         activeRepo = nil
         workspace = nil
         selectedProject = nil
@@ -281,7 +329,8 @@ final class AppModel {
         defer { isLoadingRepos = false }
         do {
             let list = try await connection.provider.repositories(context: connection.requestContext)
-            repos = list.items.sorted { fullName($0).localizedCaseInsensitiveCompare(fullName($1)) == .orderedAscending }
+            // Most-recently-updated first, so active repos stay on top.
+            repos = list.items.sorted { ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast) }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -293,19 +342,20 @@ final class AppModel {
 
     // MARK: - Open a board
 
-    func openRepo(_ repo: GitRepository) async {
+    func openRepo(_ ref: RepoRef) async {
         guard let connection else { return }
-        activeRepo = repo
+        activeRepo = ref
         errorMessage = nil
         isLoadingBoard = true
         defer { isLoadingBoard = false }
+        defaults.set(ref.fullName, forKey: activeRepoKey)
 
         source = GitPontFileSource(
             provider: connection.provider,
             instance: connection.instance,
-            owner: repo.reference.namespace,
-            repo: repo.reference.name,
-            branch: repo.reference.defaultBranch ?? "main",
+            owner: ref.namespace,
+            repo: ref.name,
+            branch: ref.branch,
             token: connection.token
         )
         await loadWorkspaceAndFirstProject()
@@ -360,6 +410,7 @@ final class AppModel {
         source = nil
         isDemo = false
         clearFilters()
+        defaults.removeObject(forKey: activeRepoKey)
     }
 
     // MARK: - Writes (over the provider API via git-pont)

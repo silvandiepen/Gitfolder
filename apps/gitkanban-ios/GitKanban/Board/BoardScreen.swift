@@ -25,7 +25,7 @@ struct BoardScreen: View {
                                        description: Text("This repo has no project boards."))
             }
         }
-        .navigationTitle(model.selectedProject?.name ?? model.activeRepo?.reference.name ?? "Board")
+        .navigationTitle(model.selectedProject?.name ?? model.activeRepo?.name ?? "Board")
         .navigationBarTitleDisplayMode(.inline)
         .overlay(alignment: .top) { savingBanner }
         .toolbar { toolbarContent }
@@ -46,7 +46,7 @@ struct BoardScreen: View {
     @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
             Button { model.closeRepo() } label: {
-                HStack(spacing: 2) { Image(systemName: "chevron.left"); Text("Repos") }
+                HStack(spacing: 2) { Image(systemName: "chevron.left"); Text("Boards") }
             }
         }
         ToolbarItemGroup(placement: .topBarTrailing) {
