@@ -356,4 +356,72 @@ final class AppModel {
             return false
         }
     }
+
+    // MARK: - Folder operations
+    //
+    // A git host has no first-class folders — they are implied by file paths. So
+    // moving/renaming/deleting a folder means rewriting every file under it (one commit
+    // each). Fine for typical folders; large trees take a moment.
+
+    /// Every file path under `path` (recursive).
+    func listAllFiles(under path: String) async -> [String] {
+        guard let client else { return [] }
+        var result: [String] = []
+        var stack = [path]
+        while let dir = stack.popLast() {
+            guard let entries = try? await client.list(dir) else { continue }
+            for entry in entries {
+                if entry.isDirectory { stack.append(entry.path) } else { result.append(entry.path) }
+            }
+        }
+        return result
+    }
+
+    /// Move (or rename) a folder to `newFolderPath` by moving each file under it. Every
+    /// file is read, written to its new path, and the old one deleted.
+    @discardableResult
+    func moveFolder(from: String, to newFolderPath: String) async -> Bool {
+        guard let client, from != newFolderPath, !newFolderPath.isEmpty else { return false }
+        isSaving = true
+        errorMessage = nil
+        defer { isSaving = false }
+        let files = await listAllFiles(under: from)
+        guard !files.isEmpty else {
+            errorMessage = "That folder has no files to move (git has no empty folders)."
+            return false
+        }
+        let message = "Move \(from) to \(newFolderPath)"
+        do {
+            for file in files {
+                let relative = String(file.dropFirst(from.count).drop { $0 == "/" })
+                let dest = newFolderPath + "/" + relative
+                let data = try await client.readData(file)
+                try await client.writeData(path: dest, data: data, message: message)
+                try await client.delete(path: file, message: message)
+            }
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    /// Delete a folder by deleting every file under it.
+    @discardableResult
+    func deleteFolder(_ path: String) async -> Bool {
+        guard let client else { return false }
+        isSaving = true
+        errorMessage = nil
+        defer { isSaving = false }
+        let files = await listAllFiles(under: path)
+        do {
+            for file in files {
+                try await client.delete(path: file, message: "Delete folder \(path)")
+            }
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
 }

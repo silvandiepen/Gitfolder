@@ -75,6 +75,8 @@ struct DirectoryView: View {
     @State private var fileTarget: FileOpen?
     @State private var renameTarget: RepoEntry?
     @State private var renameText = ""
+    @State private var moveFolderTarget: RepoEntry?
+    @State private var deleteFolderTarget: RepoEntry?
 
     var body: some View {
         content
@@ -106,6 +108,28 @@ struct DirectoryView: View {
                 Button("Rename") { Task { await performRename() } }
             }
             .sheet(item: $shareItem) { item in ShareSheet(items: [item.url]) }
+            .sheet(item: $moveFolderTarget) { folder in
+                FolderPickerView(movingPath: folder.path) { destParent in
+                    Task {
+                        let dest = destParent.isEmpty ? folder.name : "\(destParent)/\(folder.name)"
+                        if await model.moveFolder(from: folder.path, to: dest) { await reload() }
+                    }
+                }
+                .environment(model)
+            }
+            .confirmationDialog(
+                "Delete “\(deleteFolderTarget?.name ?? "")” and everything inside it?",
+                isPresented: Binding(get: { deleteFolderTarget != nil }, set: { if !$0 { deleteFolderTarget = nil } }),
+                titleVisibility: .visible
+            ) {
+                Button("Delete Folder", role: .destructive) {
+                    if let folder = deleteFolderTarget {
+                        deleteFolderTarget = nil
+                        Task { if await model.deleteFolder(folder.path) { await reload() } }
+                    }
+                }
+                Button("Cancel", role: .cancel) { deleteFolderTarget = nil }
+            }
     }
 
     // MARK: Layouts
@@ -165,10 +189,25 @@ struct DirectoryView: View {
     @ViewBuilder private func row<Content: View>(_ entry: RepoEntry, @ViewBuilder content: () -> Content) -> some View {
         if entry.isDirectory {
             NavigationLink(value: entry) { content() }
+                .contextMenu { folderActions(entry) }
         } else {
             Button { fileTarget = FileOpen(entry: entry, edit: false) } label: { content() }
                 .buttonStyle(.plain)
                 .contextMenu { fileActions(entry) }
+        }
+    }
+
+    @ViewBuilder private func folderActions(_ entry: RepoEntry) -> some View {
+        NavigationLink(value: entry) { Label("Open", systemImage: "folder") }
+        Button { renameText = entry.name; renameTarget = entry } label: {
+            Label("Rename…", systemImage: "pencil")
+        }
+        Button { moveFolderTarget = entry } label: {
+            Label("Move Folder…", systemImage: "arrow.up.and.down.and.arrow.left.and.right")
+        }
+        Divider()
+        Button(role: .destructive) { deleteFolderTarget = entry } label: {
+            Label("Delete Folder", systemImage: "trash")
         }
     }
 
@@ -254,10 +293,16 @@ struct DirectoryView: View {
         let newName = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
         renameTarget = nil
         guard !newName.isEmpty, newName != entry.name else { return }
-        guard let data = try? await model.readData(entry.path) else { return }
-        if await model.writeData(path: join(newName), data: data, message: "Rename \(entry.name) to \(newName)") {
-            _ = await model.delete(path: entry.path)
-            await reload()
+        if entry.isDirectory {
+            let parent = (entry.path as NSString).deletingLastPathComponent
+            let dest = parent.isEmpty ? newName : "\(parent)/\(newName)"
+            if await model.moveFolder(from: entry.path, to: dest) { await reload() }
+        } else {
+            guard let data = try? await model.readData(entry.path) else { return }
+            if await model.writeData(path: join(newName), data: data, message: "Rename \(entry.name) to \(newName)") {
+                _ = await model.delete(path: entry.path)
+                await reload()
+            }
         }
     }
 
