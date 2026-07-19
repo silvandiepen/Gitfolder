@@ -1,5 +1,7 @@
 import GitKit
 import SwiftUI
+import UIKit
+import UniformTypeIdentifiers
 
 /// A card's detail: opens in a read view with the description rendered as Markdown,
 /// with an Edit button that flips to an editable form. Saving commits over the
@@ -11,6 +13,9 @@ struct CardDetailSheet: View {
 
     @State private var editing = false
     @State private var confirmDelete = false
+    @State private var attachments: [BoardFileEntry] = []
+    @State private var showImporter = false
+    @State private var shareItem: CardShareItem?
 
     // Editable state.
     @State private var title = ""
@@ -39,8 +44,31 @@ struct CardDetailSheet: View {
                 .confirmationDialog("Delete this task?", isPresented: $confirmDelete, titleVisibility: .visible) {
                     Button("Delete", role: .destructive) { Task { await model.deleteCard(card); dismiss() } }
                 }
+                .fileImporter(isPresented: $showImporter, allowedContentTypes: [.item], allowsMultipleSelection: false) { result in
+                    handleImport(result)
+                }
+                .sheet(item: $shareItem) { item in ShareSheet(items: [item.url]) }
+                .task { await loadAttachments() }
         }
         .onAppear(perform: seed)
+    }
+
+    private func loadAttachments() async { attachments = await model.attachments(for: card) }
+
+    private func handleImport(_ result: Result<[URL], Error>) {
+        guard case .success(let urls) = result, let url = urls.first else { return }
+        let didAccess = url.startAccessingSecurityScopedResource()
+        defer { if didAccess { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url) else { return }
+        let name = url.lastPathComponent
+        Task { if await model.attachFile(to: card, data: data, filename: name) { await loadAttachments() } }
+    }
+
+    private func share(_ entry: BoardFileEntry) async {
+        guard let data = await model.readAttachment(path: entry.path) else { return }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(entry.name)
+        guard (try? data.write(to: url)) != nil else { return }
+        shareItem = CardShareItem(url: url)
     }
 
     @ViewBuilder private var content: some View {
@@ -69,9 +97,37 @@ struct CardDetailSheet: View {
                 } else {
                     MarkdownWebView(markdown: card.body)
                 }
+
+                Divider()
+                attachmentsSection
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding()
+        }
+    }
+
+    private var attachmentsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Attachments").font(.headline)
+                Spacer()
+                Button { showImporter = true } label: { Label("Add", systemImage: "paperclip").font(.caption) }
+            }
+            if attachments.isEmpty {
+                Text("No attachments.").font(.callout).foregroundStyle(.secondary)
+            } else {
+                ForEach(attachments, id: \.path) { entry in
+                    AttachmentRow(entry: entry)
+                        .contentShape(Rectangle())
+                        .onTapGesture { Task { await share(entry) } }
+                        .contextMenu {
+                            Button("Share", systemImage: "square.and.arrow.up") { Task { await share(entry) } }
+                            Button("Remove", systemImage: "trash", role: .destructive) {
+                                Task { await model.deleteAttachment(path: entry.path); await loadAttachments() }
+                            }
+                        }
+                }
+            }
         }
     }
 
@@ -275,4 +331,56 @@ struct NewTaskSheet: View {
             }
         }
     }
+}
+
+/// A single attachment row with a thumbnail (for images) or a file icon.
+private struct AttachmentRow: View {
+    @Environment(AppModel.self) private var model
+    let entry: BoardFileEntry
+    @State private var thumb: UIImage?
+
+    private var isImage: Bool {
+        [".png", ".jpg", ".jpeg", ".gif", ".heic", ".webp", ".bmp", ".tiff"]
+            .contains { entry.name.lowercased().hasSuffix($0) }
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8).fill(.quaternary.opacity(0.4))
+                if let thumb {
+                    Image(uiImage: thumb).resizable().scaledToFill()
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                } else {
+                    Image(systemName: isImage ? "photo" : "doc").foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: 44, height: 44)
+            Text(entry.name).font(.callout).lineLimit(1)
+            Spacer(minLength: 8)
+            Image(systemName: "square.and.arrow.up").font(.caption).foregroundStyle(.tertiary)
+        }
+        .padding(.vertical, 4)
+        .task(id: entry.path) {
+            guard isImage, thumb == nil else { return }
+            if let data = await model.readAttachment(path: entry.path), let img = UIImage(data: data) {
+                thumb = img
+            }
+        }
+    }
+}
+
+/// Identifiable temp-file wrapper for the share sheet.
+struct CardShareItem: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+/// A SwiftUI wrapper around the system share / open-in sheet.
+struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }

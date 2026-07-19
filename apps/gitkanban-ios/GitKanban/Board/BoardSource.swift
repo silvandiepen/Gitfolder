@@ -6,7 +6,9 @@ import GitKit
 /// or the offline in-memory demo (`InMemoryBoardSource`).
 protocol BoardWritable: BoardFileSource {
     func write(path: String, text: String, message: String) async throws
+    func writeData(path: String, data: Data, message: String) async throws
     func delete(path: String, message: String) async throws
+    func readData(_ path: String) async throws -> Data
 }
 
 extension GitPontFileSource: BoardWritable {}
@@ -15,6 +17,7 @@ extension GitPontFileSource: BoardWritable {}
 /// explored (and every edit flow tested) without connecting to a provider.
 actor InMemoryBoardSource: BoardWritable {
     private var files: [String: String]
+    private var datas: [String: Data] = [:]
 
     init(files: [String: String]) { self.files = files }
 
@@ -22,7 +25,7 @@ actor InMemoryBoardSource: BoardWritable {
         let prefix = directory.isEmpty ? "" : directory + "/"
         var fileNames = Set<String>()
         var dirNames = Set<String>()
-        for key in files.keys where key.hasPrefix(prefix) {
+        for key in Set(files.keys).union(datas.keys) where key.hasPrefix(prefix) {
             let rest = String(key.dropFirst(prefix.count))
             guard !rest.isEmpty else { continue }
             if let slash = rest.firstIndex(of: "/") {
@@ -43,8 +46,16 @@ actor InMemoryBoardSource: BoardWritable {
         return text
     }
 
+    func readData(_ path: String) throws -> Data {
+        if let data = datas[path] { return data }
+        if let text = files[path] { return Data(text.utf8) }
+        throw NSError(domain: "InMemoryBoardSource", code: 404,
+                      userInfo: [NSLocalizedDescriptionKey: "No such file: \(path)"])
+    }
+
     func write(path: String, text: String, message: String) { files[path] = text }
-    func delete(path: String, message: String) { files[path] = nil }
+    func writeData(path: String, data: Data, message: String) { datas[path] = data }
+    func delete(path: String, message: String) { files[path] = nil; datas[path] = nil }
 
     /// A seeded demo workspace: one project, a backlog + pipeline lanes, sample cards.
     static func demo() -> InMemoryBoardSource {

@@ -614,6 +614,48 @@ final class AppModel {
         await performWrite { try await source.write(path: newPath, text: content, message: "Duplicate \(card.fields.id)") }
     }
 
+    // MARK: - Attachments
+    //
+    // Files attached to a card live in a per-project folder namespaced by card id:
+    // <project>/attachments/<cardId>/<filename>. They're committed to the repo (so they
+    // show on GitHub by browsing that folder) and listed in the card detail.
+
+    private func attachmentsDir(for card: Card) -> String? {
+        guard let project = selectedProject else { return nil }
+        return "\(project.folder)/attachments/\(card.fields.id)"
+    }
+
+    /// The files attached to a card.
+    func attachments(for card: Card) async -> [BoardFileEntry] {
+        guard let source, let dir = attachmentsDir(for: card) else { return [] }
+        let entries = (try? await source.list(dir)) ?? []
+        return entries.filter { $0.kind == .file }.sorted { $0.name < $1.name }
+    }
+
+    /// Attach a file to a card (committed to its attachments folder).
+    @discardableResult
+    func attachFile(to card: Card, data: Data, filename: String) async -> Bool {
+        guard let source, let dir = attachmentsDir(for: card) else { return false }
+        let safe = filename.map { $0.isLetter || $0.isNumber || "._- ".contains($0) ? $0 : "-" }
+        let name = String(safe).trimmingCharacters(in: .whitespaces)
+        isSaving = true; errorMessage = nil; defer { isSaving = false }
+        do {
+            try await source.writeData(path: "\(dir)/\(name)", data: data, message: "Attach \(name) to \(card.fields.id)")
+            return true
+        } catch { errorMessage = error.localizedDescription; return false }
+    }
+
+    func deleteAttachment(path: String) async {
+        guard let source else { return }
+        isSaving = true; errorMessage = nil; defer { isSaving = false }
+        try? await source.delete(path: path, message: "Remove attachment \(path)")
+    }
+
+    func readAttachment(path: String) async -> Data? {
+        guard let source else { return nil }
+        return try? await source.readData(path)
+    }
+
     /// The github.com blob URL for a card's file (Copy Link / Open on GitHub).
     func githubURL(for card: Card) -> URL? {
         guard connection?.choice == .github, let ref = activeRepo, let location = location(of: card) else { return nil }

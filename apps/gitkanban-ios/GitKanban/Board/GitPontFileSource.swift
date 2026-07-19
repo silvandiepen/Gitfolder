@@ -91,13 +91,24 @@ struct GitPontFileSource: BoardFileSource {
         return text
     }
 
+    /// A file's raw bytes (for attachments/images).
+    func readData(_ path: String) async throws -> Data {
+        let reference = GitFileReference(repository: repository, path: full(path), ref: ref)
+        return try await provider.readFile(reference, context: context).content
+    }
+
     // MARK: Writes
 
     /// Create or overwrite a file with `text` in one commit (last-writer-wins).
     func write(path: String, text: String, message: String) async throws {
+        try await writeData(path: path, data: Data(text.utf8), message: message)
+    }
+
+    /// Create or overwrite a file with raw bytes in one commit (for binary attachments).
+    func writeData(path: String, data: Data, message: String) async throws {
         let change = GitFileChange(
             reference: GitFileReference(repository: repository, path: full(path), ref: ref),
-            content: Data(text.utf8),
+            content: data,
             message: message,
             targetBranch: ref,
             allowBlindOverwrite: true

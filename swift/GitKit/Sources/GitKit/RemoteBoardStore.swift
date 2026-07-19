@@ -99,23 +99,30 @@ public enum RemoteBoardStore {
         rootConfig: BoardConfig
     ) async throws -> LoadedBoard {
         let effective = resolveEffectiveConfig(rootConfig, project.config)
+        let laneFolders = Set(effective.lanes.map(\.folder))
 
-        var columns: [Column] = []
-        var laneFolders = Set<String>()
-        for lane in effective.lanes {
-            laneFolders.insert(lane.folder)
-            let cards = try await loadCards(
-                source: source,
-                dir: join(project.folder, lane.folder),
-                fieldSource: effective.fieldSource
-            )
-            columns.append(Column(lane: lane, cards: BoardStore.sortedCards(cards, config: effective)))
+        // Load all lanes concurrently (each lane's cards also load concurrently), so a
+        // board over the API isn't gated on sequential per-file round-trips.
+        let columns = try await withThrowingTaskGroup(of: (Int, Column).self) { group -> [Column] in
+            for (index, lane) in effective.lanes.enumerated() {
+                group.addTask {
+                    let cards = try await loadCards(
+                        source: source,
+                        dir: join(project.folder, lane.folder),
+                        fieldSource: effective.fieldSource
+                    )
+                    return (index, Column(lane: lane, cards: BoardStore.sortedCards(cards, config: effective)))
+                }
+            }
+            var results: [(Int, Column)] = []
+            for try await pair in group { results.append(pair) }
+            return results.sorted { $0.0 < $1.0 }.map(\.1)
         }
 
         var uncategorised: [Card] = []
         let subEntries = (try? await source.list(project.folder)) ?? []
         for entry in subEntries where entry.kind == .directory {
-            guard !entry.name.hasPrefix("."), !laneFolders.contains(entry.name) else { continue }
+            guard !entry.name.hasPrefix("."), !laneFolders.contains(entry.name), entry.name != "attachments" else { continue }
             uncategorised += try await loadCards(source: source, dir: entry.path, fieldSource: effective.fieldSource)
         }
 
@@ -137,12 +144,18 @@ public enum RemoteBoardStore {
             .filter { $0.name.hasSuffix(".md") && $0.name != "README.md" && !$0.name.hasPrefix("00-") }
             .sorted { $0.name < $1.name }
 
-        var cards: [Card] = []
-        for entry in names {
-            let text = try await source.readText(entry.path)
-            cards.append(BoardStore.parseCard(text: text, fileName: entry.name, fieldSource: fieldSource))
+        // Read every card file concurrently, then restore file-name order.
+        return try await withThrowingTaskGroup(of: (Int, Card).self) { group -> [Card] in
+            for (index, entry) in names.enumerated() {
+                group.addTask {
+                    let text = try await source.readText(entry.path)
+                    return (index, BoardStore.parseCard(text: text, fileName: entry.name, fieldSource: fieldSource))
+                }
+            }
+            var results: [(Int, Card)] = []
+            for try await pair in group { results.append(pair) }
+            return results.sorted { $0.0 < $1.0 }.map(\.1)
         }
-        return cards
     }
 
     private static func loadBoardConfig(source: BoardFileSource, dir: String) async throws -> BoardConfig {
