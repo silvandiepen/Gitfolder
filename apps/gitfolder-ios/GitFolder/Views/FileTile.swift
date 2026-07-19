@@ -73,20 +73,3 @@ struct TileCell: View {
     }
 }
 
-/// A compact two-up card: a small type icon and the name in a row.
-struct ColumnCell: View {
-    let entry: RepoEntry
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: FileKind.icon(entry.name, isDirectory: entry.isDirectory))
-                .foregroundStyle(entry.isDirectory ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-                .frame(width: 22)
-            Text(entry.name).font(.callout).lineLimit(1).foregroundStyle(.primary)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 12).padding(.vertical, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.secondary.opacity(0.10), in: RoundedRectangle(cornerRadius: 10))
-    }
-}

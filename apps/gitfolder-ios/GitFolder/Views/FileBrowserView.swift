@@ -7,7 +7,7 @@ struct FileBrowserRoot: View {
 
     var body: some View {
         NavigationStack {
-            DirectoryView(path: "", title: model.activeRepo?.fullName ?? "Files", isRoot: true)
+            DirectoryView(path: "", title: model.activeRepo?.name ?? "Files", isRoot: true)
                 .navigationDestination(for: RepoEntry.self) { folder in
                     DirectoryView(path: folder.path, title: folder.name, isRoot: false)
                 }
@@ -43,14 +43,13 @@ enum FileKind {
 
 /// How a directory's contents are laid out. Persisted so the choice sticks.
 enum BrowseLayout: String, CaseIterable, Identifiable {
-    case list, tiles, columns
+    case list, tiles
     var id: String { rawValue }
     var label: String { rawValue.capitalized }
     var icon: String {
         switch self {
         case .list: return "list.bullet"
         case .tiles: return "square.grid.2x2"
-        case .columns: return "rectangle.grid.2x2"
         }
     }
 }
@@ -115,7 +114,6 @@ struct DirectoryView: View {
         switch layout {
         case .list: listLayout
         case .tiles: gridLayout(columns: [GridItem(.adaptive(minimum: 104), spacing: 16)], spacing: 18) { TileCell(entry: $0) }
-        case .columns: gridLayout(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) { ColumnCell(entry: $0) }
         }
     }
 
@@ -203,7 +201,7 @@ struct DirectoryView: View {
             Picker("Layout", selection: $layoutRaw) {
                 ForEach(BrowseLayout.allCases) { l in Image(systemName: l.icon).tag(l.rawValue) }
             }
-            .pickerStyle(.segmented).frame(width: 150)
+            .pickerStyle(.segmented).frame(width: 104)
         }
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
