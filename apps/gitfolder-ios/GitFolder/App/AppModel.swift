@@ -148,6 +148,9 @@ final class AppModel {
 
     private func pollGitHubOAuth(provider: GitHubProvider, session: GitOAuthDeviceSession) async {
         var interval = max(session.interval, 5)
+        // Keep the code on screen and keep polling until the user authorises (success),
+        // explicitly declines, the code expires, or the user cancels. Transient errors
+        // (network blips, still-pending) never tear the screen down.
         while Date() < session.expiresAt {
             try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
             if deviceAuth == nil { return } // cancelled by the user
@@ -162,22 +165,30 @@ final class AppModel {
                 return
             } catch GitPontError.authenticationFailed(let message) {
                 let m = message.lowercased()
-                if m.contains("pending") { continue }        // keep waiting
-                if m.contains("slow") { interval += 5; continue } // back off
-                deviceAuth = nil
-                isConnecting = false
-                errorMessage = "Sign-in failed: \(message)"
-                return
+                if m.contains("slow") { interval += 5 }                 // back off, keep polling
+                if m.contains("denied") || m.contains("declined") {     // user said no
+                    finishOAuth(error: "Sign-in was declined on GitHub.")
+                    return
+                }
+                if m.contains("expired") {                              // code no longer valid
+                    finishOAuth(error: "The code expired. Please try again.")
+                    return
+                }
+                // "authorization_pending" and anything else: keep waiting.
+                continue
             } catch {
-                deviceAuth = nil
-                isConnecting = false
-                errorMessage = error.localizedDescription
-                return
+                // Transient (e.g. network) — do not close the screen; poll again.
+                continue
             }
         }
+        finishOAuth(error: "Sign-in timed out. Please try again.")
+    }
+
+    private func finishOAuth(error: String) {
+        guard deviceAuth != nil else { return } // already resolved/cancelled
         deviceAuth = nil
         isConnecting = false
-        errorMessage = "Sign-in timed out. Please try again."
+        errorMessage = error
     }
 
     func signOut() {

@@ -101,6 +101,7 @@ struct ConnectView: View {
                     Button {
                         UIPasteboard.general.string = device.userCode
                     } label: { Label("Copy Code", systemImage: "doc.on.doc") }
+                        .buttonStyle(.borderless)
                     Spacer()
                     Button {
                         openURL(device.verificationURI)
@@ -113,6 +114,7 @@ struct ConnectView: View {
                     Text("Waiting for authorisation…").font(.caption).foregroundStyle(.secondary)
                     Spacer()
                     Button("Cancel", role: .cancel) { model.cancelOAuth() }
+                        .buttonStyle(.borderless)
                 }
                 .padding(.top, 4)
             }
