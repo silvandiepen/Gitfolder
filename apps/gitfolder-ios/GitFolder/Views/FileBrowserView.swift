@@ -252,6 +252,16 @@ struct DirectoryView: View {
     }
 
     @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
+        if isRoot {
+            ToolbarItem(placement: .topBarLeading) {
+                Button { model.closeRepo() } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "chevron.backward")
+                        Text("Repos")
+                    }
+                }
+            }
+        }
         ToolbarItemGroup(placement: .topBarTrailing) {
             Button {
                 layoutRaw = (layout == .list ? BrowseLayout.tiles : .list).rawValue
@@ -263,10 +273,6 @@ struct DirectoryView: View {
             Menu {
                 Button { showNewFile = true } label: { Label("New File", systemImage: "doc.badge.plus") }
                 Button { Task { await reload() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
-                if isRoot {
-                    Divider()
-                    Button { model.closeRepo() } label: { Label("Close Repository", systemImage: "xmark") }
-                }
             } label: {
                 Image(systemName: "ellipsis.circle")
             }
