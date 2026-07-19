@@ -158,7 +158,9 @@ private struct LanesView: View {
                     }
                 }
                 .padding(.horizontal, 16).padding(.vertical, 12)
+                .scrollTargetLayout()
             }
+            .scrollTargetBehavior(.viewAligned)
         }
     }
 }
@@ -167,6 +169,7 @@ private struct LaneColumn: View {
     @Environment(AppModel.self) private var model
     let column: Column
     let maxHeight: CGFloat
+    @State private var isTargeted = false
 
     private var color: Color { laneColor(column.lane, model.board?.config ?? EffectiveConfig()) }
     private var isLane: Bool { !column.lane.folder.isEmpty }
@@ -201,8 +204,24 @@ private struct LaneColumn: View {
         .padding(12)
         .frame(width: 300)
         .frame(maxHeight: maxHeight, alignment: .top)
+        .background((isTargeted ? color.opacity(0.14) : Color.clear), in: RoundedRectangle(cornerRadius: 14))
         .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(color.opacity(0.3), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(isTargeted ? color : color.opacity(0.3), lineWidth: isTargeted ? 2 : 1))
+        .dropDestination(for: String.self) { ids, _ in handleDrop(ids) } isTargeted: { isTargeted = $0 }
+    }
+
+    /// Move dropped cards (by id) into this lane.
+    private func handleDrop(_ ids: [String]) -> Bool {
+        guard isLane else { return false }
+        var moved = false
+        for id in ids {
+            if let card = model.allCards.first(where: { $0.fields.id == id }),
+               card.fields.status != column.lane.status {
+                Task { await model.moveCard(card, to: column.lane) }
+                moved = true
+            }
+        }
+        return moved
     }
 }
 
@@ -232,6 +251,12 @@ private struct LaneCardCell: View {
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(.quaternary, lineWidth: 1))
         .contentShape(Rectangle())
         .onTapGesture { model.selectedCard = card }
+        .draggable(card.fields.id) {
+            // Drag preview: a compact chip of the card title.
+            Text(card.fields.title.isEmpty ? card.fields.id : card.fields.title)
+                .font(.callout).lineLimit(1).padding(10)
+                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
+        }
         .contextMenu { cardMenu(card, model: model) }
     }
 }

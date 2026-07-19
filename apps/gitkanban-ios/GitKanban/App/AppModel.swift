@@ -383,14 +383,32 @@ final class AppModel {
         guard let source, let project = selectedProject,
               let location = location(of: card), let fileName = card.fileName,
               location.lane.id != lane.id, !lane.folder.isEmpty else { return }
+
+        // Optimistic: move the card between columns in memory right away so a drag lands
+        // instantly; the git commit runs in the background and reverts on failure.
+        if var board, let srcIdx = board.columns.firstIndex(where: { $0.lane.id == location.lane.id }),
+           let dstIdx = board.columns.firstIndex(where: { $0.lane.id == lane.id }),
+           let cardIdx = board.columns[srcIdx].cards.firstIndex(where: { $0.fields.id == card.fields.id }) {
+            var moved = board.columns[srcIdx].cards.remove(at: cardIdx)
+            moved.fields.status = lane.status
+            board.columns[dstIdx].cards.append(moved)
+            self.board = board
+        }
+
         let original = (try? await source.readText(location.path)) ?? card.body
         let updated = CardText.update(original, set: ["status": lane.status])
         let newPath = "\(project.folder)/\(lane.folder)/\(fileName)"
         let message = "Move \(card.fields.id) to \(lane.name)"
-        await performWrite {
+        isSaving = true
+        errorMessage = nil
+        do {
             try await source.write(path: newPath, text: updated, message: message)
             try await source.delete(path: location.path, message: message)
+        } catch {
+            errorMessage = error.localizedDescription
+            if let project = selectedProject { await selectProject(project) } // revert
         }
+        isSaving = false
     }
 
     func updateCard(
