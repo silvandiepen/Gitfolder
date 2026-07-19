@@ -1,18 +1,33 @@
 import Foundation
 
-/// A lightweight, persistable reference to a board's repository — enough to list it and
-/// rebuild the board source without a full `GitRepository`.
-struct RepoRef: Codable, Identifiable, Hashable {
+/// A board the user selected within a repo — a project folder path, its display name,
+/// and a small summary shown in the boards list.
+struct SelectedBoard: Codable, Identifiable, Hashable {
+    var folder: String   // project folder path relative to the repo root ("" = repo root board)
+    var name: String
+    var laneCount: Int = 0
+    var memberCount: Int = 0
+    var hasBacklog: Bool = false
+    var id: String { folder }
+
+    var subtitle: String {
+        var parts = ["\(laneCount) lane\(laneCount == 1 ? "" : "s")"]
+        if hasBacklog { parts.append("backlog") }
+        if memberCount > 0 { parts.append("\(memberCount) member\(memberCount == 1 ? "" : "s")") }
+        if !folder.isEmpty { parts.append(folder) }
+        return parts.joined(separator: " · ")
+    }
+}
+
+/// A repository the user added, plus the boards (projects) they selected from within it.
+/// Persisted so the home reopens instantly without re-scanning.
+struct AddedRepo: Codable, Identifiable, Hashable {
     var namespace: String
     var name: String
     var branch: String
     var isPrivate: Bool
-    /// Optional subfolder within the repo where the boards live (e.g. "project-assets/Tasks").
-    var path: String = ""
+    var boards: [SelectedBoard] = []
 
     var fullName: String { "\(namespace)/\(name)" }
-    /// Distinct per repo + subpath, so the same repo can be added at different paths.
-    var id: String { path.isEmpty ? fullName : "\(fullName)#\(path)" }
-    /// A short label for the board's location.
-    var displayName: String { path.isEmpty ? name : "\(name)/\(path)" }
+    var id: String { fullName }
 }

@@ -67,9 +67,10 @@ final class AppModel {
 
     // MARK: Active board
     /// Boards (repos) the user has added — shown on the home screen. Persisted.
-    var addedRepos: [RepoRef] = []
+    var addedRepos: [AddedRepo] = []
+    var activeBoardFolder: String?
     /// The open board's repo (nil = home list). Persisted so it reopens on launch.
-    var activeRepo: RepoRef?
+    var activeRepo: AddedRepo?
     var workspace: Workspace?
     var selectedProject: BoardProject?
     var board: LoadedBoard?
@@ -121,8 +122,9 @@ final class AppModel {
     )
     @ObservationIgnored private let defaults = UserDefaults.standard
     @ObservationIgnored private let connectionKey = "gitkanban.connection"
-    @ObservationIgnored private let addedReposKey = "gitkanban.addedRepos"
+    @ObservationIgnored private let addedReposKey = "gitkanban.addedReposV2"
     @ObservationIgnored private let activeRepoKey = "gitkanban.activeRepo"
+    @ObservationIgnored private let activeBoardKey = "gitkanban.activeBoard"
 
     @ObservationIgnored private var source: (any BoardWritable)?
     /// True when viewing the offline in-memory demo board (no provider connection).
@@ -139,49 +141,85 @@ final class AppModel {
               !token.isEmpty else { return }
         await connect(choice: stored.choice, serverURL: stored.serverURL, token: token, persist: false)
         // Reopen the last board so relaunching lands where you left off.
-        if isConnected, let saved = defaults.string(forKey: activeRepoKey),
-           let ref = addedRepos.first(where: { $0.fullName == saved }) {
-            await openRepo(ref)
+        if isConnected,
+           let savedRepo = defaults.string(forKey: activeRepoKey),
+           let repo = addedRepos.first(where: { $0.fullName == savedRepo }),
+           let folder = defaults.string(forKey: activeBoardKey),
+           repo.boards.contains(where: { $0.folder == folder }) {
+            await openBoard(repo, folder: folder)
         }
     }
 
-    // MARK: - Boards (added repos)
+    // MARK: - Repos & boards
 
     private func persistAddedRepos() {
         if let data = try? JSONEncoder().encode(addedRepos) { defaults.set(data, forKey: addedReposKey) }
     }
     private func loadAddedRepos() {
         guard let data = defaults.data(forKey: addedReposKey),
-              let saved = try? JSONDecoder().decode([RepoRef].self, from: data) else { return }
+              let saved = try? JSONDecoder().decode([AddedRepo].self, from: data) else { return }
         addedRepos = saved
     }
 
-    /// Add a repo (optionally rooted at a subfolder) to the home list and load its
-    /// boards. Does not auto-open — the home then lists its boards grouped by repo.
-    func addRepo(_ repo: GitRepository, path: String = "") async {
-        let clean = path.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
-        let ref = RepoRef(
+    /// Add a repository (no boards yet). The caller then browses it to pick boards.
+    @discardableResult
+    func addRepo(_ repo: GitRepository) -> AddedRepo {
+        if let existing = addedRepos.first(where: { $0.fullName == "\(repo.reference.namespace)/\(repo.reference.name)" }) {
+            return existing
+        }
+        let added = AddedRepo(
             namespace: repo.reference.namespace,
             name: repo.reference.name,
             branch: repo.reference.defaultBranch ?? "main",
             isPrivate: repo.isPrivate,
-            path: clean
+            boards: []
         )
-        if !addedRepos.contains(where: { $0.id == ref.id }) {
-            addedRepos.append(ref)
-            addedRepos.sort { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
-            persistAddedRepos()
-        }
-        homeBoards[ref.id] = nil
-        await loadHomeBoards()
+        addedRepos.append(added)
+        addedRepos.sort { $0.fullName.localizedCaseInsensitiveCompare($1.fullName) == .orderedAscending }
+        persistAddedRepos()
+        return added
     }
 
-    /// Remove a repo from the home list. If a board from it is open, return home.
-    func removeAddedRepo(_ ref: RepoRef) {
-        addedRepos.removeAll { $0.id == ref.id }
-        homeBoards[ref.id] = nil
+    func removeAddedRepo(_ repo: AddedRepo) {
+        addedRepos.removeAll { $0.id == repo.id }
         persistAddedRepos()
-        if activeRepo?.id == ref.id { closeRepo() }
+        if activeRepo?.id == repo.id { closeRepo() }
+    }
+
+    /// Set which boards are selected for a repo (from the browse/multi-select step).
+    func setBoards(_ boards: [SelectedBoard], for repoID: String) {
+        guard let index = addedRepos.firstIndex(where: { $0.id == repoID }) else { return }
+        addedRepos[index].boards = boards.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        persistAddedRepos()
+    }
+
+    /// Remove one board from a repo.
+    func removeBoard(_ board: SelectedBoard, from repo: AddedRepo) {
+        guard let index = addedRepos.firstIndex(where: { $0.id == repo.id }) else { return }
+        addedRepos[index].boards.removeAll { $0.id == board.id }
+        persistAddedRepos()
+    }
+
+    /// A file source rooted at a repo's root (no subpath — boards are addressed by folder).
+    private func makeSource(for repo: AddedRepo) -> GitPontFileSource? {
+        guard let connection else { return nil }
+        return GitPontFileSource(
+            provider: connection.provider, instance: connection.instance,
+            owner: repo.namespace, repo: repo.name, branch: repo.branch, token: connection.token)
+    }
+
+    /// Discover every board (project) in a repo, with a summary, for the browse step.
+    func discoverBoards(in repo: AddedRepo) async -> [SelectedBoard] {
+        guard let source = makeSource(for: repo) else { return [] }
+        guard let workspace = try? await RemoteBoardStore.loadWorkspace(source: source) else { return [] }
+        return workspace.projects.map { project in
+            let effective = resolveEffectiveConfig(workspace.rootConfig, project.config)
+            return SelectedBoard(
+                folder: project.folder, name: project.name,
+                laneCount: effective.lanes.count,
+                memberCount: effective.users.count,
+                hasBacklog: effective.lanes.contains { $0.isBacklog })
+        }
     }
 
     // MARK: - Connect
@@ -315,11 +353,12 @@ final class AppModel {
         defaults.removeObject(forKey: connectionKey)
         defaults.removeObject(forKey: addedReposKey)
         defaults.removeObject(forKey: activeRepoKey)
+        defaults.removeObject(forKey: activeBoardKey)
         connection = nil
         repos = []
         addedRepos = []
-        homeBoards = [:]
         activeRepo = nil
+        activeBoardFolder = nil
         workspace = nil
         selectedProject = nil
         board = nil
@@ -348,57 +387,26 @@ final class AppModel {
 
     // MARK: - Open a board
 
-    func openRepo(_ ref: RepoRef) async {
-        guard let connection else { return }
-        activeRepo = ref
+    /// Open a specific board (project folder) within a repo.
+    func openBoard(_ repo: AddedRepo, folder: String) async {
+        guard let source = makeSource(for: repo) else { return }
+        activeRepo = repo
+        activeBoardFolder = folder
+        self.source = source
         errorMessage = nil
+        loadedBacklogLanes = []
         isLoadingBoard = true
         defer { isLoadingBoard = false }
-        defaults.set(ref.fullName, forKey: activeRepoKey)
-
-        source = GitPontFileSource(
-            provider: connection.provider,
-            instance: connection.instance,
-            owner: ref.namespace,
-            repo: ref.name,
-            branch: ref.branch,
-            token: connection.token,
-            basePath: ref.path
-        )
-        await loadWorkspaceAndFirstProject()
-    }
-
-    /// Open a specific board (project) within a repo.
-    func openBoard(_ ref: RepoRef, project: BoardProject) async {
-        if activeRepo?.id != ref.id {
-            await openRepo(ref)
-        }
-        if let match = workspace?.projects.first(where: { $0.folder == project.folder }) {
-            await selectProject(match)
-        }
-    }
-
-    // MARK: - Home (boards grouped by repo)
-
-    /// Cached project lists per added repo (repo id → boards), for the grouped home.
-    var homeBoards: [String: [BoardProject]] = [:]
-    var isLoadingHome = false
-
-    /// Load each added repo's workspace so the home can list boards grouped by repo.
-    func loadHomeBoards() async {
-        guard let connection else { return }
-        isLoadingHome = true
-        defer { isLoadingHome = false }
-        for ref in addedRepos where homeBoards[ref.id] == nil {
-            let source = GitPontFileSource(
-                provider: connection.provider, instance: connection.instance,
-                owner: ref.namespace, repo: ref.name, branch: ref.branch,
-                token: connection.token, basePath: ref.path)
-            if let workspace = try? await RemoteBoardStore.loadWorkspace(source: source) {
-                homeBoards[ref.id] = workspace.projects
-            } else {
-                homeBoards[ref.id] = []
-            }
+        defaults.set(repo.fullName, forKey: activeRepoKey)
+        defaults.set(folder, forKey: activeBoardKey)
+        do {
+            let loaded = try await RemoteBoardStore.loadBoard(source: source, folder: folder, loadBacklog: false)
+            // A single-project workspace, so edit/reload paths keep working.
+            workspace = Workspace(rootConfig: loaded.rootConfig, projects: [loaded.project])
+            selectedProject = loaded.project
+            board = loaded.board
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -464,6 +472,7 @@ final class AppModel {
 
     func closeRepo() {
         activeRepo = nil
+        activeBoardFolder = nil
         workspace = nil
         selectedProject = nil
         board = nil
@@ -471,6 +480,7 @@ final class AppModel {
         isDemo = false
         clearFilters()
         defaults.removeObject(forKey: activeRepoKey)
+        defaults.removeObject(forKey: activeBoardKey)
     }
 
     // MARK: - Projects (board settings)
@@ -677,10 +687,9 @@ final class AppModel {
 
     /// The github.com blob URL for a card's file (Copy Link / Open on GitHub).
     func githubURL(for card: Card) -> URL? {
-        guard connection?.choice == .github, let ref = activeRepo, let location = location(of: card) else { return nil }
-        let repoPath = ref.path.isEmpty ? location.path : "\(ref.path)/\(location.path)"
-        let encoded = repoPath.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? repoPath
-        return URL(string: "https://github.com/\(ref.namespace)/\(ref.name)/blob/\(ref.branch)/\(encoded)")
+        guard connection?.choice == .github, let repo = activeRepo, let location = location(of: card) else { return nil }
+        let encoded = location.path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? location.path
+        return URL(string: "https://github.com/\(repo.namespace)/\(repo.name)/blob/\(repo.branch)/\(encoded)")
     }
 
     /// Persist a new within-lane order by rewriting each card's `order` frontmatter.

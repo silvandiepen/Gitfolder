@@ -134,6 +134,21 @@ public enum RemoteBoardStore {
         return LoadedBoard(config: effective, columns: columns, uncategorised: uncategorised)
     }
 
+    /// Open a specific board by its project folder (`""` = the repo root board), without
+    /// a full workspace scan. Returns the project, the root config it inherits from, and
+    /// the loaded board. `folder` is relative to the source root.
+    public static func loadBoard(
+        source: BoardFileSource, folder: String, loadBacklog: Bool = false
+    ) async throws -> (project: BoardProject, rootConfig: BoardConfig, board: LoadedBoard) {
+        let rootConfig = (try? await loadBoardConfig(source: source, dir: "")) ?? BoardConfig()
+        let projectConfig = (try? await loadProjectConfig(source: source, dir: folder)) ?? ProjectConfig()
+        let fallback = folder.split(separator: "/").last.map(String.init) ?? "Board"
+        let name = projectConfig.project?.isEmpty == false ? projectConfig.project! : fallback
+        let project = BoardProject(id: folder, name: name, folder: folder, config: projectConfig)
+        let board = try await loadProjectBoard(source: source, project: project, rootConfig: rootConfig, loadBacklog: loadBacklog)
+        return (project, rootConfig, board)
+    }
+
     /// Load (and sort) the cards for a single lane on demand — used to lazily load a
     /// backlog lane that `loadProjectBoard(loadBacklog: false)` skipped.
     public static func loadLaneCards(
