@@ -52,6 +52,21 @@ Conflict recovery UI, project settings, bulk actions, and precise drag reorder a
 | Sync/status | Surface loading/saving/pushing/error states. No silent conflict handling; failed ref updates require a visible recovery path. |
 | Native app handoff | Detect likely installed app support, show "Open in GitKanban", attempt custom URL scheme, and fall back to the web board. |
 
+## GitPont migration target
+
+GitPont master now includes:
+
+- `@git-pont/core`: provider-neutral TypeScript facade for OAuth, repository APIs, URL parsing,
+  reads, commits, deletes, branch/PR submission, and normalized provider errors.
+- `@git-pont/worker`: Cloudflare Worker service with OAuth, HTTP-only sessions, encrypted KV
+  credential storage, repository listing, metadata, branches, content reads, profile storage, and
+  CORS for web apps.
+
+GitKanban Web should use GitPont Worker as the production boundary. That gives the web app a path
+to GitHub, GitLab, self-hosted GitLab, Forgejo/Gitea, Codeberg, and Bitbucket without implementing
+provider differences in the UI. Current direct GitHub browser auth/API code remains a temporary
+bridge until GitPont Worker exposes write endpoints.
+
 ## Explicit non-goals for the first build
 
 - No non-GitHub providers.

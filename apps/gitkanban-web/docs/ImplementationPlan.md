@@ -63,7 +63,9 @@ The first code slice is built:
 
 ## Next implementation slice
 
-1. Add project settings.
-2. Implement precise drag reorder and bulk move/assign/delete.
-3. Add optimistic UI and ref-change recovery.
-4. Add rendered markdown preview/export polish.
+1. Deploy/configure GitPont Worker for `kanban.hakobs.com`.
+2. Replace browser GitHub OAuth/session/repository reads with GitPont Worker endpoints.
+3. Add GitPont Worker write endpoints for commit/delete/submit, backed by `@git-pont/core`.
+4. Move GitKanban create/edit/move/delete/reorder onto those worker write endpoints.
+5. Add project settings, precise drag reorder, bulk move/assign/delete, optimistic UI, and
+   ref-change recovery.

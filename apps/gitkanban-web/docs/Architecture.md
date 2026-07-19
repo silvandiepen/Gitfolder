@@ -6,16 +6,18 @@
 - Pinia stores for session, repositories, workspace, board state, and UI preferences.
 - SCSS + BEM via `bemm`; `@sil/ui` tokens; no Tailwind and no scoped styles.
 - `packages/gitkanban-core` for all board contract behavior.
-- GitHub REST APIs for repository contents, git object writes, refs, and commit history.
-- GitHub OAuth/GitHub App authorization code flow with PKCE for browser sign-in.
+- GitPont Worker as the intended auth/git boundary.
+- Temporary bridge: direct GitHub OAuth/PAT and GitHub REST APIs until GitPont Worker exposes the
+  write endpoints GitKanban needs.
 
 ## Data flow
 
 ```txt
 Browser UI
   -> Pinia stores / services
-  -> GitHub adapter
-  -> GitHub repository files
+  -> GitPont Worker
+  -> GitPont core/provider APIs
+  -> hosted git provider files
 
 Browser UI
   -> packages/gitkanban-core
@@ -26,43 +28,45 @@ The app should keep the same app boundary as macOS:
 
 - UI components render state and emit user intent.
 - Stores coordinate loaded repos/projects/boards and optimistic UI state.
-- Services perform GitHub reads/writes.
+- Services perform provider reads/writes through GitPont Worker. The current GitHub adapter is a
+  temporary bridge.
 - `packages/gitkanban-core` owns board semantics.
 
-## GitHub write model
+## Write model
 
-Browser code cannot shell out to git. The web app should use GitHub's Git Database APIs for
-multi-file commits:
+Browser code cannot shell out to git. Writes should go through GitPont Worker endpoints backed by
+`@git-pont/core`:
 
-1. Read the current branch ref.
-2. Read the base commit/tree.
-3. Create blobs for changed markdown files.
-4. Create a new tree with file updates/deletions.
-5. Create a commit with one logical action message.
-6. Update the branch ref if it still points at the expected base.
+1. The app sends a provider-neutral file change request.
+2. The worker resolves the user's session and connection.
+3. GitPont core calls the relevant provider API.
+4. The worker returns normalized commit/conflict/error data.
 
 If the ref changed, the app must reload and show a "remote changed" recovery state rather than
 silently overwriting.
 
-## Auth
+Current bridge: GitKanban Web still uses GitHub Git Database APIs directly for create/edit/move/
+delete until GitPont Worker exposes commit/delete/submit routes.
 
-The browser app uses GitHub authorization code flow with PKCE. It stores the PKCE verifier in
-`sessionStorage` during the redirect, exchanges the returned code with the verifier, and then uses
-the resulting user access token for GitHub API calls.
+## Auth And Git Boundary
 
-The app uses only the GitHub Client ID in source. A client secret must not be committed or shipped
-to the browser.
+Production auth and repository access should use GitPont Worker:
 
-For local development, the GitHub App callback URL must be `http://localhost:5173/`. By default
-the web app does not send a `redirect_uri` parameter, so GitHub uses the callback URL configured
-on the app.
+- `GET /auth/github/start` starts provider OAuth.
+- `GET /auth/github/callback` exchanges the code server-side, stores encrypted credentials, sets
+  an HTTP-only session cookie, and redirects back to the app.
+- `GET /session` restores returning users.
+- `GET /repositories`, `/repos/:owner/:repo`, `/branches`, and `/contents/<path>` provide the
+  provider-neutral read layer.
 
-Production is configured with `VITE_GITHUB_REDIRECT_URI=https://kanban.hakobs.com/` in
-`.env.production`. Cloudflare Pages should map the `gitkanban-web` Pages project to
-`kanban.hakobs.com`.
+This moves secrets and refresh tokens out of the browser and lets the app support GitHub, GitLab,
+Forgejo/Gitea, Codeberg, and Bitbucket through the same API as GitPont ports those providers.
 
-Fallback: allow a fine-grained PAT pasted into the browser, stored only in local browser storage
-the user can clear.
+Production GitPont Worker target should use:
+
+- App origin: `https://kanban.hakobs.com`
+- Worker OAuth callback: `https://<gitpont-worker-host>/auth/github/callback`
+- Worker redirect back to app: `https://kanban.hakobs.com/`
 
 ## Native app detection and handoff
 
