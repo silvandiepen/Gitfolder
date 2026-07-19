@@ -149,6 +149,27 @@ public enum RemoteBoardStore {
         return (project, rootConfig, board)
     }
 
+    /// Count the cards in a board without reading their contents — just list each lane
+    /// folder and count card files. Used for the boards list's "N tasks" summary.
+    public static func taskCount(source: BoardFileSource, folder: String) async throws -> Int {
+        let rootConfig = (try? await loadBoardConfig(source: source, dir: "")) ?? BoardConfig()
+        let projectConfig = (try? await loadProjectConfig(source: source, dir: folder)) ?? ProjectConfig()
+        let effective = resolveEffectiveConfig(rootConfig, projectConfig)
+        return try await withThrowingTaskGroup(of: Int.self) { group -> Int in
+            for lane in effective.lanes {
+                group.addTask {
+                    let entries = (try? await source.list(join(folder, lane.folder))) ?? []
+                    return entries.filter {
+                        $0.kind == .file && $0.name.hasSuffix(".md") && $0.name != "README.md" && !$0.name.hasPrefix("00-")
+                    }.count
+                }
+            }
+            var total = 0
+            for try await count in group { total += count }
+            return total
+        }
+    }
+
     /// Load (and sort) the cards for a single lane on demand — used to lazily load a
     /// backlog lane that `loadProjectBoard(loadBacklog: false)` skipped.
     public static func loadLaneCards(

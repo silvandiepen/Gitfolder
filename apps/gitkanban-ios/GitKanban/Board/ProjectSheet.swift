@@ -42,6 +42,14 @@ struct ProjectSheet: View {
         return palette[i % palette.count]
     }
 
+    /// An explicit inline delete button for a settings row.
+    @ViewBuilder private func deleteButton(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "minus.circle.fill").foregroundStyle(.red)
+        }
+        .buttonStyle(.plain)
+    }
+
     /// Priority colour by rank (highest → lowest).
     static func priorityColor(_ i: Int) -> Color {
         let ramp: [Color] = [
@@ -65,6 +73,7 @@ struct ProjectSheet: View {
                         HStack(spacing: 10) {
                             Circle().fill(Self.laneColor(index)).frame(width: 11, height: 11)
                             TextField("Lane name", text: $item.name)
+                            deleteButton { laneItems.removeAll { $0.id == item.id } }
                         }
                     }
                     .onDelete { laneItems.remove(atOffsets: $0) }
@@ -82,6 +91,7 @@ struct ProjectSheet: View {
                         HStack(spacing: 10) {
                             Image(systemName: "flag.fill").font(.caption).foregroundStyle(Self.priorityColor(index))
                             TextField("P0", text: $item.text).textInputAutocapitalization(.characters)
+                            deleteButton { priorityItems.removeAll { $0.id == item.id } }
                         }
                     }
                     .onDelete { priorityItems.remove(atOffsets: $0) }
@@ -94,7 +104,10 @@ struct ProjectSheet: View {
 
                 Section("Members") {
                     ForEach($memberItems) { $item in
-                        TextField("username", text: $item.text).textInputAutocapitalization(.never).autocorrectionDisabled()
+                        HStack {
+                            TextField("username", text: $item.text).textInputAutocapitalization(.never).autocorrectionDisabled()
+                            deleteButton { memberItems.removeAll { $0.id == item.id } }
+                        }
                     }
                     .onDelete { memberItems.remove(atOffsets: $0) }
                     Button { memberItems.append(TextItem(text: "")) } label: { Label("Add Member", systemImage: "plus") }
@@ -102,15 +115,23 @@ struct ProjectSheet: View {
 
                 Section("Types") {
                     ForEach($typeItems) { $item in
-                        TextField("feature", text: $item.text).textInputAutocapitalization(.never)
+                        HStack {
+                            TextField("feature", text: $item.text).textInputAutocapitalization(.never)
+                            deleteButton { typeItems.removeAll { $0.id == item.id } }
+                        }
                     }
                     .onDelete { typeItems.remove(atOffsets: $0) }
                     Button { typeItems.append(TextItem(text: "")) } label: { Label("Add Type", systemImage: "plus") }
                 }
 
                 Section("Epics") {
-                    ForEach($epicItems) { $item in TextField("Epic name", text: $item.name) }
-                        .onDelete { epicItems.remove(atOffsets: $0) }
+                    ForEach($epicItems) { $item in
+                        HStack {
+                            TextField("Epic name", text: $item.name)
+                            deleteButton { epicItems.removeAll { $0.id == item.id } }
+                        }
+                    }
+                    .onDelete { epicItems.remove(atOffsets: $0) }
                     Button { epicItems.append(EpicItem(name: "", origin: nil)) } label: { Label("Add Epic", systemImage: "plus") }
                 }
 

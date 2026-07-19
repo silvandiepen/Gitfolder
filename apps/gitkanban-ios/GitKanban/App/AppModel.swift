@@ -208,18 +208,27 @@ final class AppModel {
             owner: repo.namespace, repo: repo.name, branch: repo.branch, token: connection.token)
     }
 
-    /// Discover every board (project) in a repo, with a summary, for the browse step.
-    func discoverBoards(in repo: AddedRepo) async -> [SelectedBoard] {
+    /// Cached total task counts per board (key = repoID|folder), for the boards list.
+    var boardCounts: [String: Int] = [:]
+
+    func boardCount(_ repo: AddedRepo, _ folder: String) -> Int? { boardCounts["\(repo.id)|\(folder)"] }
+
+    /// Lazily count a board's tasks for the boards list (once, then cached).
+    func loadBoardCount(_ repo: AddedRepo, _ folder: String) async {
+        let key = "\(repo.id)|\(folder)"
+        guard boardCounts[key] == nil, let source = makeSource(for: repo) else { return }
+        let count = (try? await RemoteBoardStore.taskCount(source: source, folder: folder)) ?? 0
+        boardCounts[key] = count
+    }
+
+    /// The subfolders under a repo-relative path (`""` = repo root) — for browsing to
+    /// pick board folders yourself, no scanning/heuristics.
+    func listFolders(in repo: AddedRepo, at path: String) async -> [BoardFileEntry] {
         guard let source = makeSource(for: repo) else { return [] }
-        guard let workspace = try? await RemoteBoardStore.loadWorkspace(source: source) else { return [] }
-        return workspace.projects.map { project in
-            let effective = resolveEffectiveConfig(workspace.rootConfig, project.config)
-            return SelectedBoard(
-                folder: project.folder, name: project.name,
-                laneCount: effective.lanes.count,
-                memberCount: effective.users.count,
-                hasBacklog: effective.lanes.contains { $0.isBacklog })
-        }
+        let entries = (try? await source.list(path)) ?? []
+        return entries
+            .filter { $0.kind == .directory && !$0.name.hasPrefix(".") && $0.name != "node_modules" }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     // MARK: - Connect

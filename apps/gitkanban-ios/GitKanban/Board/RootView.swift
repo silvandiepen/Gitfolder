@@ -172,6 +172,14 @@ private struct HomeView: View {
     @State private var showAdd = false
     @State private var browseRepo: AddedRepo?
 
+    /// "N tasks · <folder>" for a board row (task count loads lazily).
+    private func boardSubtitle(_ repo: AddedRepo, _ board: SelectedBoard) -> String {
+        var parts: [String] = []
+        if let n = model.boardCount(repo, board.folder) { parts.append("\(n) task\(n == 1 ? "" : "s")") }
+        if !board.folder.isEmpty { parts.append(board.folder) }
+        return parts.isEmpty ? "Loading…" : parts.joined(separator: " · ")
+    }
+
     var body: some View {
         Group {
             if model.addedRepos.isEmpty {
@@ -200,7 +208,7 @@ private struct HomeView: View {
                                                 .font(.title3).foregroundStyle(.tint).frame(width: 26)
                                             VStack(alignment: .leading, spacing: 1) {
                                                 Text(board.name).font(.body).foregroundStyle(.primary)
-                                                Text(board.subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                                Text(boardSubtitle(repo, board)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                                             }
                                             Spacer(minLength: 8)
                                             Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
@@ -208,6 +216,7 @@ private struct HomeView: View {
                                         .contentShape(Rectangle())
                                     }
                                     .buttonStyle(.plain)
+                                    .task { await model.loadBoardCount(repo, board.folder) }
                                     .swipeActions(edge: .trailing) {
                                         Button(role: .destructive) { model.removeBoard(board, from: repo) } label: {
                                             Label("Remove", systemImage: "minus.circle")
@@ -299,60 +308,100 @@ private struct AddRepoView: View {
     }
 }
 
-/// Browse a repo and multi-select which boards (projects) to include.
+/// Browse a repo's folders and check whichever ones you want as boards — no scanning
+/// or heuristics; you pick the folders directly, at any depth.
 private struct BoardPickerView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let repo: AddedRepo
     var onDone: (() -> Void)? = nil
 
-    @State private var discovered: [SelectedBoard]?
-    @State private var selected: Set<String> = []
+    /// folder path → display name of the boards you've checked.
+    @State private var selected: [String: String] = [:]
 
     var body: some View {
-        Group {
-            if let discovered {
-                if discovered.isEmpty {
-                    ContentUnavailableView("No boards found", systemImage: "questionmark.folder",
-                                           description: Text("No projects with a board config were found in \(repo.fullName)."))
-                } else {
-                    List(discovered) { board in
-                        Button {
-                            if selected.contains(board.folder) { selected.remove(board.folder) }
-                            else { selected.insert(board.folder) }
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: selected.contains(board.folder) ? "checkmark.circle.fill" : "circle")
-                                    .foregroundStyle(selected.contains(board.folder) ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(board.name).foregroundStyle(.primary)
-                                    Text(board.subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                                }
-                                Spacer()
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            } else {
-                ProgressView("Scanning \(repo.name)…")
+        FolderLevel(repo: repo, path: "", title: repo.name, selected: $selected) {
+            let boards = selected.map { SelectedBoard(folder: $0.key, name: $0.value) }
+            model.setBoards(boards, for: repo.id)
+            if let onDone { onDone() } else { dismiss() }
+        }
+        .onAppear {
+            if selected.isEmpty {
+                selected = Dictionary(uniqueKeysWithValues: repo.boards.map { ($0.folder, $0.name) })
             }
         }
-        .navigationTitle("Select Boards")
+    }
+}
+
+/// One level of the repo folder tree. Check a folder to include it as a board; tap it to
+/// go deeper. Done saves from any level.
+private struct FolderLevel: View {
+    @Environment(AppModel.self) private var model
+    let repo: AddedRepo
+    let path: String
+    let title: String
+    @Binding var selected: [String: String]
+    let commit: () -> Void
+
+    @State private var folders: [BoardFileEntry]?
+
+    private func name(for folderPath: String) -> String {
+        folderPath.split(separator: "/").last.map(String.init) ?? repo.name
+    }
+    private func toggle(_ folderPath: String) {
+        if selected[folderPath] != nil { selected[folderPath] = nil }
+        else { selected[folderPath] = name(for: folderPath) }
+    }
+
+    var body: some View {
+        List {
+            Section {
+                Button { toggle(path) } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: selected[path] != nil ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(selected[path] != nil ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                        Text(path.isEmpty ? "Use repository root as a board" : "Use “\(title)” as a board")
+                        Spacer()
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            Section("Folders") {
+                if let folders {
+                    if folders.isEmpty {
+                        Text("No subfolders").foregroundStyle(.secondary)
+                    }
+                    ForEach(folders, id: \.path) { entry in
+                        HStack(spacing: 12) {
+                            Button { toggle(entry.path) } label: {
+                                Image(systemName: selected[entry.path] != nil ? "checkmark.circle.fill" : "circle")
+                                    .foregroundStyle(selected[entry.path] != nil ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                            }
+                            .buttonStyle(.plain)
+                            NavigationLink {
+                                FolderLevel(repo: repo, path: entry.path, title: entry.name, selected: $selected, commit: commit)
+                                    .environment(model)
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "folder.fill").foregroundStyle(.tint)
+                                    Text(entry.name)
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    HStack(spacing: 8) { ProgressView().controlSize(.small); Text("Loading…").foregroundStyle(.secondary) }
+                }
+            }
+        }
+        .navigationTitle(path.isEmpty ? "Select Boards" : title)
         .navigationBarTitleDisplayMode(.inline)
+        .task { folders = await model.listFolders(in: repo, at: path) }
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button("Done") {
-                    let chosen = (discovered ?? []).filter { selected.contains($0.folder) }
-                    model.setBoards(chosen, for: repo.id)
-                    if let onDone { onDone() } else { dismiss() }
-                }
+                Button("Done") { commit() }
             }
-        }
-        .task {
-            selected = Set(repo.boards.map(\.folder))
-            discovered = await model.discoverBoards(in: repo)
         }
     }
 }

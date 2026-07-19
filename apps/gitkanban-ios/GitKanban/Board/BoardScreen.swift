@@ -55,15 +55,13 @@ struct BoardScreen: View {
             }
         }
         ToolbarItemGroup(placement: .topBarTrailing) {
-            if model.boardViewMode == .list { EditButton() }
             if let lane = firstLane {
                 Button { model.newTaskLane = lane } label: { Image(systemName: "plus") }
                     .help("New task")
             }
-            projectMenu
-            layoutMenu
             Button { model.isShowingSearch = true } label: { Image(systemName: "magnifyingglass") }
             filterMenu
+            overflowMenu
         }
     }
 
@@ -73,26 +71,21 @@ struct BoardScreen: View {
             ?? model.board?.config.lanes.first { !$0.folder.isEmpty }
     }
 
-    private var projectMenu: some View {
-        Menu {
-            Button("New Project…", systemImage: "plus") { showNewProject = true }
-            if let project = model.selectedProject {
-                Button("Project Settings…", systemImage: "gearshape") { settingsProject = project }
-            }
-        } label: {
-            Image(systemName: "folder")
-        }
-    }
-
-    private var layoutMenu: some View {
+    /// Less-frequent actions folded into one menu so the bar doesn't overflow.
+    private var overflowMenu: some View {
         @Bindable var model = model
         return Menu {
             Picker("View", selection: $model.boardViewMode) {
                 Label("Lanes", systemImage: "rectangle.split.3x1").tag(BoardViewMode.lanes)
                 Label("List", systemImage: "list.bullet").tag(BoardViewMode.list)
             }
+            Divider()
+            Button("New Project…", systemImage: "plus") { showNewProject = true }
+            if let project = model.selectedProject {
+                Button("Project Settings…", systemImage: "gearshape") { settingsProject = project }
+            }
         } label: {
-            Image(systemName: model.boardViewMode == .lanes ? "rectangle.split.3x1" : "list.bullet")
+            Image(systemName: "ellipsis.circle")
         }
     }
 
