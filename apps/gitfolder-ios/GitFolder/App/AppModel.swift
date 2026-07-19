@@ -237,7 +237,11 @@ final class AppModel {
         defer { isLoadingRepos = false }
         do {
             let list = try await connection.provider.repositories(context: connection.requestContext)
-            repos = list.items.sorted { fullName($0).localizedCaseInsensitiveCompare(fullName($1)) == .orderedAscending }
+            // Most-recently-updated first, so repos you actually touch stay on top
+            // (not a wall of years-old repos from other people, sorted alphabetically).
+            repos = list.items.sorted {
+                ($0.updatedAt ?? .distantPast) > ($1.updatedAt ?? .distantPast)
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
