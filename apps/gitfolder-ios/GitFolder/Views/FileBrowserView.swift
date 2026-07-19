@@ -80,7 +80,7 @@ struct DirectoryView: View {
         content
             .overlay { if isLoading { ProgressView() } }
             .navigationTitle(title)
-            .navigationBarTitleDisplayMode(isRoot ? .large : .inline)
+            .navigationBarTitleDisplayMode(.large)
             .refreshable { await reload() }
             .task { await reload() }
             .toolbar { toolbarContent }
