@@ -32,6 +32,25 @@ struct ProjectSheet: View {
         AppModel.defaultPriorities().map { TextItem(text: $0.id) }
     }
 
+    /// Lane colour by position (matches the board's palette).
+    static func laneColor(_ i: Int) -> Color {
+        let palette: [Color] = [
+            Color(red: 0.55, green: 0.36, blue: 0.96), Color(red: 0.23, green: 0.51, blue: 0.96),
+            Color(red: 0.96, green: 0.62, blue: 0.09), Color(red: 0.91, green: 0.70, blue: 0.05),
+            Color(red: 0.13, green: 0.77, blue: 0.37), Color(red: 0.09, green: 0.64, blue: 0.72),
+        ]
+        return palette[i % palette.count]
+    }
+
+    /// Priority colour by rank (highest → lowest).
+    static func priorityColor(_ i: Int) -> Color {
+        let ramp: [Color] = [
+            Color(red: 0.90, green: 0.26, blue: 0.21), Color(red: 0.96, green: 0.55, blue: 0.09),
+            Color(red: 0.23, green: 0.51, blue: 0.96), Color(red: 0.45, green: 0.50, blue: 0.58),
+        ]
+        return ramp[min(i, ramp.count - 1)]
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -40,19 +59,37 @@ struct ProjectSheet: View {
                     TextField("Description (optional)", text: $description, axis: .vertical).lineLimit(1...4)
                 }
 
-                Section("Lanes") {
-                    ForEach($laneItems) { $item in TextField("Lane name", text: $item.name) }
-                        .onDelete { laneItems.remove(atOffsets: $0) }
-                        .onMove { laneItems.move(fromOffsets: $0, toOffset: $1) }
+                Section {
+                    ForEach($laneItems) { $item in
+                        let index = laneItems.firstIndex { $0.id == item.id } ?? 0
+                        HStack(spacing: 10) {
+                            Circle().fill(Self.laneColor(index)).frame(width: 11, height: 11)
+                            TextField("Lane name", text: $item.name)
+                        }
+                    }
+                    .onDelete { laneItems.remove(atOffsets: $0) }
+                    .onMove { laneItems.move(fromOffsets: $0, toOffset: $1) }
                     Button { laneItems.append(LaneItem(name: "", origin: nil)) } label: { Label("Add Lane", systemImage: "plus") }
+                } header: {
+                    Text("Lanes")
+                } footer: {
+                    Text("Drag to reorder (Edit); the first lanes are the start of the workflow.")
                 }
 
-                Section("Priorities") {
+                Section {
                     ForEach($priorityItems) { $item in
-                        TextField("P0", text: $item.text).textInputAutocapitalization(.characters)
+                        let index = priorityItems.firstIndex { $0.id == item.id } ?? 0
+                        HStack(spacing: 10) {
+                            Image(systemName: "flag.fill").font(.caption).foregroundStyle(Self.priorityColor(index))
+                            TextField("P0", text: $item.text).textInputAutocapitalization(.characters)
+                        }
                     }
                     .onDelete { priorityItems.remove(atOffsets: $0) }
                     Button { priorityItems.append(TextItem(text: "P\(priorityItems.count)")) } label: { Label("Add Priority", systemImage: "plus") }
+                } header: {
+                    Text("Priorities")
+                } footer: {
+                    Text("Ordered highest to lowest.")
                 }
 
                 Section("Members") {
@@ -85,6 +122,7 @@ struct ProjectSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .topBarLeading) { EditButton() }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(isEditing ? "Save" : "Create") { Task { await save() } }
                         .disabled(trimmedName.isEmpty || model.isSaving)

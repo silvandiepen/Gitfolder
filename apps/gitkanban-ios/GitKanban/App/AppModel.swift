@@ -429,18 +429,37 @@ final class AppModel {
         }
     }
 
+    /// Backlog lanes whose cards have been lazily loaded (they're skipped on first load).
+    var loadedBacklogLanes: Set<String> = []
+    var loadingBacklogLane: String?
+
     func selectProject(_ project: BoardProject) async {
         guard let source, let workspace else { return }
         isLoadingBoard = true
         defer { isLoadingBoard = false }
+        loadedBacklogLanes = []
         do {
             board = try await RemoteBoardStore.loadProjectBoard(
-                source: source, project: project, rootConfig: workspace.rootConfig
+                source: source, project: project, rootConfig: workspace.rootConfig, loadBacklog: false
             )
             selectedProject = project
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// Lazily load a backlog lane's cards on demand.
+    func loadBacklogLane(_ lane: Lane) async {
+        guard let source, let project = selectedProject, let rootConfig = workspace?.rootConfig, var board else { return }
+        loadingBacklogLane = lane.id
+        defer { loadingBacklogLane = nil }
+        let cards = (try? await RemoteBoardStore.loadLaneCards(
+            source: source, project: project, lane: lane, rootConfig: rootConfig)) ?? []
+        if let index = board.columns.firstIndex(where: { $0.lane.id == lane.id }) {
+            board.columns[index].cards = cards
+            self.board = board
+        }
+        loadedBacklogLanes.insert(lane.id)
     }
 
     func closeRepo() {

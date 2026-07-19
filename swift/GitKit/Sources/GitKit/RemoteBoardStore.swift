@@ -96,16 +96,21 @@ public enum RemoteBoardStore {
     public static func loadProjectBoard(
         source: BoardFileSource,
         project: BoardProject,
-        rootConfig: BoardConfig
+        rootConfig: BoardConfig,
+        loadBacklog: Bool = true
     ) async throws -> LoadedBoard {
         let effective = resolveEffectiveConfig(rootConfig, project.config)
         let laneFolders = Set(effective.lanes.map(\.folder))
 
         // Load all lanes concurrently (each lane's cards also load concurrently), so a
-        // board over the API isn't gated on sequential per-file round-trips.
+        // board over the API isn't gated on sequential per-file round-trips. Backlog
+        // lanes are skipped unless requested — they can be large and load on demand.
         let columns = try await withThrowingTaskGroup(of: (Int, Column).self) { group -> [Column] in
             for (index, lane) in effective.lanes.enumerated() {
                 group.addTask {
+                    guard loadBacklog || !lane.isBacklog else {
+                        return (index, Column(lane: lane, cards: []))
+                    }
                     let cards = try await loadCards(
                         source: source,
                         dir: join(project.folder, lane.folder),
@@ -127,6 +132,17 @@ public enum RemoteBoardStore {
         }
 
         return LoadedBoard(config: effective, columns: columns, uncategorised: uncategorised)
+    }
+
+    /// Load (and sort) the cards for a single lane on demand — used to lazily load a
+    /// backlog lane that `loadProjectBoard(loadBacklog: false)` skipped.
+    public static func loadLaneCards(
+        source: BoardFileSource, project: BoardProject, lane: Lane, rootConfig: BoardConfig
+    ) async throws -> [Card] {
+        let effective = resolveEffectiveConfig(rootConfig, project.config)
+        let cards = try await loadCards(
+            source: source, dir: join(project.folder, lane.folder), fieldSource: effective.fieldSource)
+        return BoardStore.sortedCards(cards, config: effective)
     }
 
     // MARK: - Helpers

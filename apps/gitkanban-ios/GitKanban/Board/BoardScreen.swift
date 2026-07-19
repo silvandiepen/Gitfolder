@@ -212,10 +212,26 @@ private struct LaneColumn: View {
                     .padding(.horizontal, 6).padding(.vertical, 1)
                     .background(color.opacity(0.16), in: Capsule())
             }
-            ScrollView(.vertical, showsIndicators: false) {
-                LazyVStack(spacing: 8) {
-                    ForEach(column.cards) { card in
-                        LaneCardCell(card: card)
+            if column.lane.isBacklog && !model.loadedBacklogLanes.contains(column.lane.id) {
+                Button {
+                    Task { await model.loadBacklogLane(column.lane) }
+                } label: {
+                    if model.loadingBacklogLane == column.lane.id {
+                        ProgressView().frame(maxWidth: .infinity)
+                    } else {
+                        Label("Load Backlog", systemImage: "tray.and.arrow.down")
+                            .font(.callout).frame(maxWidth: .infinity)
+                    }
+                }
+                .buttonStyle(.bordered)
+                .padding(.top, 20)
+                Spacer(minLength: 0)
+            } else {
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVStack(spacing: 8) {
+                        ForEach(column.cards) { card in
+                            LaneCardCell(card: card)
+                        }
                     }
                 }
             }
@@ -290,7 +306,14 @@ private struct ListBoardView: View {
         List {
             ForEach(columns) { column in
                 Section {
-                    if column.cards.isEmpty {
+                    if column.lane.isBacklog && !model.loadedBacklogLanes.contains(column.lane.id) {
+                        Button {
+                            Task { await model.loadBacklogLane(column.lane) }
+                        } label: {
+                            Label(model.loadingBacklogLane == column.lane.id ? "Loading…" : "Load Backlog",
+                                  systemImage: "tray.and.arrow.down")
+                        }
+                    } else if column.cards.isEmpty {
                         Text("No tasks").font(.caption).foregroundStyle(.secondary)
                     } else {
                         ForEach(column.cards) { card in
