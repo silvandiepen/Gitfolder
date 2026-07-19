@@ -56,11 +56,21 @@ struct BoardScreen: View {
         }
         ToolbarItemGroup(placement: .topBarTrailing) {
             if model.boardViewMode == .list { EditButton() }
+            if let lane = firstLane {
+                Button { model.newTaskLane = lane } label: { Image(systemName: "plus") }
+                    .help("New task")
+            }
             projectMenu
             layoutMenu
             Button { model.isShowingSearch = true } label: { Image(systemName: "magnifyingglass") }
             filterMenu
         }
+    }
+
+    /// The first real (non-backlog) lane — the default target for the header + button.
+    private var firstLane: Lane? {
+        model.board?.config.lanes.first { !$0.folder.isEmpty && !$0.isBacklog }
+            ?? model.board?.config.lanes.first { !$0.folder.isEmpty }
     }
 
     private var projectMenu: some View {
@@ -206,14 +216,6 @@ private struct LaneColumn: View {
                 LazyVStack(spacing: 8) {
                     ForEach(column.cards) { card in
                         LaneCardCell(card: card)
-                    }
-                    if isLane {
-                        Button { model.newTaskLane = column.lane } label: {
-                            Label("Add Task", systemImage: "plus")
-                                .font(.caption).frame(maxWidth: .infinity).padding(.vertical, 8)
-                        }
-                        .buttonStyle(.plain).foregroundStyle(.secondary)
-                        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
                     }
                 }
             }

@@ -32,26 +32,62 @@ public struct BoardFileEntry: Sendable, Equatable {
 /// shared `BoardStore` logic, so a board renders identically to the macOS app.
 public enum RemoteBoardStore {
 
-    /// Load the workspace at the repo root: the root config plus every project folder
-    /// (an immediate subdirectory containing a `README.md`), sorted by display name.
+    /// Load the workspace. Handles flexible layouts:
+    /// - **Direct board:** lanes at the repo root (root README has `lanes`) → one project.
+    /// - **Multi-project:** top-level folders that each contain a `README.md`.
+    /// - **Nested:** projects under organisational folders at any depth (e.g.
+    ///   `project-assets/Tasks/<project>`), found by recursing into folders that only
+    ///   contain other project/container folders (not lane folders).
     public static func loadWorkspace(source: BoardFileSource) async throws -> Workspace {
         let rootConfig = (try? await loadBoardConfig(source: source, dir: "")) ?? BoardConfig()
-        let entries = (try? await source.list("")) ?? []
+        let rootEntries = (try? await source.list("")) ?? []
+        let rootLaneFolders = Set(rootConfig.lanes.map(\.folder))
 
-        var projects: [BoardProject] = []
-        for entry in entries where entry.kind == .directory {
-            let folder = entry.name
-            guard !folder.hasPrefix("."), folder != ".git" else { continue }
-            let children = (try? await source.list(entry.path)) ?? []
-            guard children.contains(where: { $0.kind == .file && $0.name == "README.md" }) else { continue }
-
-            let config = (try? await loadProjectConfig(source: source, dir: entry.path)) ?? ProjectConfig()
-            let name = config.project?.isEmpty == false ? config.project! : folder
-            projects.append(BoardProject(id: folder, name: name, folder: folder, config: config))
+        // Direct board: the repo root itself holds the lane folders (not sub-projects).
+        if !rootConfig.lanes.isEmpty,
+           rootEntries.contains(where: { $0.kind == .directory && rootLaneFolders.contains($0.name) }) {
+            let project = BoardProject(id: "", name: "Board", folder: "", config: ProjectConfig())
+            return Workspace(rootConfig: rootConfig, projects: [project])
         }
 
+        var projects = await discoverProjects(source: source, dir: "", inheritedLanes: rootConfig.lanes, depth: 0)
         projects.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         return Workspace(rootConfig: rootConfig, projects: projects)
+    }
+
+    /// Recursively find project folders. A directory is a **project** when its README
+    /// carries a project marker (`project:`), or it actually contains the lane folders
+    /// of the effective config. Other folders (organisational, e.g. `project-assets/`
+    /// or a `Tasks/` root holding per-project folders) are recursed into so boards at
+    /// any depth are found — without misreading a lane folder as a project.
+    private static func discoverProjects(
+        source: BoardFileSource, dir: String, inheritedLanes: [Lane], depth: Int
+    ) async -> [BoardProject] {
+        guard depth <= 4 else { return [] }
+        let entries = (try? await source.list(dir)) ?? []
+        let inheritedFolders = Set(inheritedLanes.map(\.folder))
+        var found: [BoardProject] = []
+
+        for entry in entries where entry.kind == .directory {
+            let name = entry.name
+            guard !name.hasPrefix("."), name != "node_modules" else { continue }
+            if inheritedFolders.contains(name) { continue }  // a lane folder of this board
+
+            let projectConfig = (try? await loadProjectConfig(source: source, dir: entry.path)) ?? ProjectConfig()
+            let ownBoard = (try? await loadBoardConfig(source: source, dir: entry.path)) ?? BoardConfig()
+            let lanes = ownBoard.lanes.isEmpty ? inheritedLanes : ownBoard.lanes
+            let laneFolders = Set(lanes.map(\.folder))
+            let children = (try? await source.list(entry.path)) ?? []
+            let hasLaneFolders = children.contains { $0.kind == .directory && laneFolders.contains($0.name) }
+
+            if projectConfig.project != nil || hasLaneFolders {
+                let display = projectConfig.project?.isEmpty == false ? projectConfig.project! : name
+                found.append(BoardProject(id: entry.path, name: display, folder: entry.path, config: projectConfig))
+            } else {
+                found += await discoverProjects(source: source, dir: entry.path, inheritedLanes: lanes, depth: depth + 1)
+            }
+        }
+        return found
     }
 
     /// Resolve and load one project's board. Cards are read from each lane's folder

@@ -195,6 +195,7 @@ struct NewTaskSheet: View {
     let lane: Lane
 
     @State private var title = ""
+    @State private var laneID = ""
     @State private var priority = ""
     @State private var type = ""
     @State private var assignee = ""
@@ -202,15 +203,22 @@ struct NewTaskSheet: View {
     @State private var body_ = ""
 
     private var config: EffectiveConfig? { model.board?.config }
+    private var lanes: [Lane] { config?.lanes.filter { !$0.folder.isEmpty } ?? [] }
     private var priorities: [Priority] { config?.priorities ?? [] }
     private var users: [User] { config?.users ?? [] }
     private var types: [String] { config?.types ?? [] }
     private var epics: [Epic] { config?.epics ?? [] }
+    private var targetLane: Lane { lanes.first { $0.id == laneID } ?? lane }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("New task in \(lane.name)") { TextField("Title", text: $title) }
+                Section("New Task") {
+                    TextField("Title", text: $title)
+                    Picker("Lane", selection: $laneID) {
+                        ForEach(lanes) { Text($0.name).tag($0.id) }
+                    }
+                }
                 Section {
                     if !priorities.isEmpty {
                         Picker("Priority", selection: $priority) {
@@ -245,13 +253,14 @@ struct NewTaskSheet: View {
             }
             .navigationTitle("New Task")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear { if laneID.isEmpty { laneID = lane.id } }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Create") {
                         Task {
                             await model.createTask(
-                                title: title, lane: lane,
+                                title: title, lane: targetLane,
                                 priority: priority.isEmpty ? nil : priority,
                                 type: type.isEmpty ? nil : type,
                                 assignee: assignee.isEmpty ? nil : assignee,
