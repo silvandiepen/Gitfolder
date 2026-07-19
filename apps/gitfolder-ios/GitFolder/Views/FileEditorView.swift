@@ -14,6 +14,7 @@ struct FileEditorView: View {
     @State private var loadError: String?
     @State private var editing = false
     @State private var seededMode = false
+    @State private var shareItem: ShareItem?
 
     private var isMarkdown: Bool {
         let l = name.lowercased()
@@ -54,6 +55,12 @@ struct FileEditorView: View {
                     }
                 }
                 Button {
+                    shareItem = writeTempFile()
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                }
+                .disabled(isLoading || loadError != nil)
+                Button {
                     Task { await save() }
                 } label: {
                     if model.isSaving { ProgressView() } else { Text("Save") }
@@ -61,6 +68,16 @@ struct FileEditorView: View {
                 .disabled(!isDirty || model.isSaving || isLoading)
             }
         }
+        .sheet(item: $shareItem) { item in
+            ShareSheet(items: [item.url])
+        }
+    }
+
+    /// Write the current text to a temp file (keeping its name) for the share/export sheet.
+    private func writeTempFile() -> ShareItem? {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+        guard (try? Data(text.utf8).write(to: url)) != nil else { return nil }
+        return ShareItem(url: url)
     }
 
     private func load() async {

@@ -73,6 +73,7 @@ struct DirectoryView: View {
     @State private var loadError: String?
     @State private var showNewFile = false
     @State private var newFileName = ""
+    @State private var shareItem: ShareItem?
 
     var body: some View {
         content
@@ -90,6 +91,9 @@ struct DirectoryView: View {
                 Button("Create") { Task { await createFile() } }
             } message: {
                 Text("Creates and commits a new file in this folder.")
+            }
+            .sheet(item: $shareItem) { item in
+                ShareSheet(items: [item.url])
             }
     }
 
@@ -121,6 +125,7 @@ struct DirectoryView: View {
                     }
                 }
                 .swipeActions(edge: .trailing) { deleteButton(entry) }
+                .contextMenu { fileActions(entry) }
             }
             if !isLoading && entries.isEmpty && loadError == nil {
                 Text("Empty folder").foregroundStyle(.secondary)
@@ -143,7 +148,7 @@ struct DirectoryView: View {
                 ForEach(entries) { entry in
                     NavigationLink(value: entry) { cell(entry) }
                         .buttonStyle(.plain)
-                        .contextMenu { deleteButton(entry) }
+                        .contextMenu { fileActions(entry) }
                 }
             }
             .padding(16)
@@ -156,6 +161,23 @@ struct DirectoryView: View {
                 Task { if await model.delete(path: entry.path) { await reload() } }
             } label: { Label("Delete", systemImage: "trash") }
         }
+    }
+
+    /// Context-menu actions for a file: share/export, then delete.
+    @ViewBuilder private func fileActions(_ entry: RepoEntry) -> some View {
+        if !entry.isDirectory {
+            Button {
+                Task { await shareFile(entry) }
+            } label: { Label("Share / Export…", systemImage: "square.and.arrow.up") }
+            deleteButton(entry)
+        }
+    }
+
+    private func shareFile(_ entry: RepoEntry) async {
+        guard let data = try? await model.readData(entry.path) else { return }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(entry.name)
+        guard (try? data.write(to: url)) != nil else { return }
+        shareItem = ShareItem(url: url)
     }
 
     @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
