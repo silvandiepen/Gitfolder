@@ -140,7 +140,10 @@ public enum RemoteBoardStore {
     public static func loadBoard(
         source: BoardFileSource, folder: String, loadBacklog: Bool = false
     ) async throws -> (project: BoardProject, rootConfig: BoardConfig, board: LoadedBoard) {
-        let rootConfig = (try? await loadBoardConfig(source: source, dir: "")) ?? BoardConfig()
+        // The root board config lives in the project's parent directory (e.g.
+        // `Tasks/README.md` for a `Tasks/<project>` board), so a project that leaves
+        // `lanes: []` inherits the parent board's lanes. Fall back to the repo root.
+        let rootConfig = await resolveRootConfig(source: source, projectFolder: folder)
         let projectConfig = (try? await loadProjectConfig(source: source, dir: folder)) ?? ProjectConfig()
         let fallback = folder.split(separator: "/").last.map(String.init) ?? "Board"
         let name = projectConfig.project?.isEmpty == false ? projectConfig.project! : fallback
@@ -158,7 +161,7 @@ public enum RemoteBoardStore {
     /// Count the cards in a board without reading their contents — just list each lane
     /// folder and count card files. Used for the boards list's "N tasks" summary.
     public static func taskCount(source: BoardFileSource, folder: String) async throws -> Int {
-        let rootConfig = (try? await loadBoardConfig(source: source, dir: "")) ?? BoardConfig()
+        let rootConfig = await resolveRootConfig(source: source, projectFolder: folder)
         let projectConfig = (try? await loadProjectConfig(source: source, dir: folder)) ?? ProjectConfig()
         let effective = resolveEffectiveConfig(rootConfig, projectConfig)
         return try await withThrowingTaskGroup(of: Int.self) { group -> Int in
@@ -214,6 +217,38 @@ public enum RemoteBoardStore {
             for try await pair in group { results.append(pair) }
             return results.sorted { $0.0 < $1.0 }.map(\.1)
         }
+    }
+
+    /// The root board config a project inherits from. Walk up from the project's parent
+    /// directory to the repo root, using the first README that declares any lanes; if
+    /// none do, fall back to the immediate parent (then repo root). This lets a
+    /// `Tasks/<project>` board inherit the lanes defined in `Tasks/README.md`, and a
+    /// project at the repo root inherit the root README.
+    private static func resolveRootConfig(source: BoardFileSource, projectFolder: String) async -> BoardConfig {
+        var dir = parentDir(projectFolder)
+        while true {
+            if let config = try? await loadBoardConfig(source: source, dir: dir), !config.lanes.isEmpty {
+                return config
+            }
+            if dir.isEmpty { break }
+            dir = parentDir(dir)
+        }
+        // No ancestor defined lanes — use the immediate parent's config (vocab may still
+        // be inherited), falling back to the repo root.
+        let parent = parentDir(projectFolder)
+        if let config = try? await loadBoardConfig(source: source, dir: parent) {
+            return config
+        }
+        if let root = try? await loadBoardConfig(source: source, dir: "") {
+            return root
+        }
+        return BoardConfig()
+    }
+
+    /// The parent directory of a repo-relative path ("" for a top-level entry).
+    private static func parentDir(_ path: String) -> String {
+        guard let slash = path.lastIndex(of: "/") else { return "" }
+        return String(path[..<slash])
     }
 
     private static func loadBoardConfig(source: BoardFileSource, dir: String) async throws -> BoardConfig {

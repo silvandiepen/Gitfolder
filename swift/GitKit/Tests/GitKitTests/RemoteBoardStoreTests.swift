@@ -125,4 +125,50 @@ final class RemoteBoardStoreTests: XCTestCase {
         let backlog = try XCTUnwrap(remote.columns.first { $0.lane.id == "backlog" })
         XCTAssertEqual(backlog.cards.map { $0.fields.id }, ["B-1"])
     }
+
+    /// A nested board (`Tasks/GitKit`) whose own README leaves `lanes: []` must inherit
+    /// the lanes from its parent board config (`Tasks/README.md`) — not the repo root —
+    /// so its cards land in the inherited lane columns instead of "uncategorised".
+    func testNestedBoardInheritsParentLanes() async throws {
+        // Repo root README has NO lanes — the board config lives one level down.
+        try write("---\ntitle: Repo\n---\n\n# Repo", to: "README.md")
+        try write("""
+        ---
+        config: board
+        lanes:
+          - id: todo
+            name: To do
+            folder: "1. To do"
+            status: todo
+          - id: done
+            name: Done
+            folder: "2. Done"
+            status: done
+            terminal: true
+        ---
+
+        # Tasks
+        """, to: "Tasks/README.md")
+        // The project inherits by leaving lanes empty.
+        try write("---\nconfig: project\nproject: GitKit\nlanes: []\n---\n\n# GitKit", to: "Tasks/GitKit/README.md")
+        try write("---\nid: G-1\ntitle: One\nstatus: todo\n---\n\n# One", to: "Tasks/GitKit/1. To do/G-1.md")
+        try write("---\nid: G-2\ntitle: Two\nstatus: done\n---\n\n# Two", to: "Tasks/GitKit/2. Done/G-2.md")
+
+        let source = DiskFileSource(root: root)
+        let loaded = try await RemoteBoardStore.loadBoard(source: source, folder: "Tasks/GitKit", loadBacklog: true)
+
+        // Inherited the parent board's lanes, not the empty repo root.
+        XCTAssertEqual(loaded.rootConfig.lanes.map(\.id), ["todo", "done"])
+        XCTAssertEqual(loaded.board.config.lanes.map(\.id), ["todo", "done"])
+        // Cards are categorised into their inherited lanes — nothing uncategorised.
+        XCTAssertTrue(loaded.board.uncategorised.isEmpty)
+        let todo = try XCTUnwrap(loaded.board.columns.first { $0.lane.id == "todo" })
+        XCTAssertEqual(todo.cards.map { $0.fields.id }, ["G-1"])
+        let done = try XCTUnwrap(loaded.board.columns.first { $0.lane.id == "done" })
+        XCTAssertEqual(done.cards.map { $0.fields.id }, ["G-2"])
+
+        // taskCount uses the same inherited config.
+        let count = try await RemoteBoardStore.taskCount(source: source, folder: "Tasks/GitKit")
+        XCTAssertEqual(count, 2)
+    }
 }
