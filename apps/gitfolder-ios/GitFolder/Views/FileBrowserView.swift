@@ -7,16 +7,28 @@ struct FileBrowserRoot: View {
 
     var body: some View {
         NavigationStack {
-            DirectoryView(path: "", title: model.activeRepo.map(model.fullName) ?? "Files", isRoot: true)
+            DirectoryView(path: "", title: model.activeRepo?.fullName ?? "Files", isRoot: true)
                 .navigationDestination(for: RepoEntry.self) { entry in
                     if entry.isDirectory {
                         DirectoryView(path: entry.path, title: entry.name, isRoot: false)
+                    } else if FileKind.isImage(entry.name) {
+                        ImageViewerView(path: entry.path, name: entry.name)
                     } else {
                         FileEditorView(path: entry.path, name: entry.name)
                     }
                 }
         }
     }
+}
+
+/// File-type helpers shared across the browser.
+enum FileKind {
+    static func isImage(_ name: String) -> Bool {
+        let l = name.lowercased()
+        return [".png", ".jpg", ".jpeg", ".gif", ".heic", ".webp", ".bmp", ".tiff", ".svg"]
+            .contains { l.hasSuffix($0) }
+    }
+    static func isSVG(_ name: String) -> Bool { name.lowercased().hasSuffix(".svg") }
 }
 
 /// One directory's listing. Loads entries over the provider API; folders navigate,

@@ -19,17 +19,16 @@ struct RepoFileClient {
     let repository: GitRepositoryReference
     let ref: String
 
-    init(connection: ProviderConnection, repo: GitRepository) {
+    init(connection: ProviderConnection, ref repoRef: RepoRef) {
         self.provider = connection.provider
         self.context = connection.requestContext
-        let branch = repo.reference.defaultBranch ?? "main"
         self.repository = GitRepositoryReference(
             instance: connection.instance,
-            namespace: repo.reference.namespace,
-            name: repo.reference.name,
-            defaultBranch: branch
+            namespace: repoRef.namespace,
+            name: repoRef.name,
+            defaultBranch: repoRef.branch
         )
-        self.ref = branch
+        self.ref = repoRef.branch
     }
 
     /// List a directory (empty string = repo root), folders first then files, A→Z.
@@ -52,6 +51,12 @@ struct RepoFileClient {
             throw GitPontError.invalidProviderResponse("File is not UTF-8 text: \(path)")
         }
         return text
+    }
+
+    /// Read a file's raw bytes (for images and other binary content).
+    func readData(_ path: String) async throws -> Data {
+        let reference = GitFileReference(repository: repository, path: path, ref: ref)
+        return try await provider.readFile(reference, context: context).content
     }
 
     /// Create or overwrite a file with `text` in one commit (last-writer-wins).

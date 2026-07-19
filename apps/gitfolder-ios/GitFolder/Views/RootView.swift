@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Top-level flow: restore → connect → pick a repo → browse & edit files.
+/// Top-level flow: restore → connect → home (added repos) → browse & edit files.
 struct RootView: View {
     @Environment(AppModel.self) private var model
 
@@ -9,10 +9,10 @@ struct RootView: View {
             ProgressView("Loading…")
         } else if !model.isConnected {
             NavigationStack { ConnectView() }
-        } else if model.activeRepo == nil {
-            NavigationStack { RepoListView() }
-        } else {
+        } else if model.activeRepo != nil {
             FileBrowserRoot()
+        } else {
+            NavigationStack { HomeView() }
         }
     }
 }

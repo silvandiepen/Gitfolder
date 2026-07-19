@@ -50,6 +50,9 @@ targets:
         CFBundleShortVersionString: "0.1.0"
         CFBundleVersion: "1"
         LSRequiresIPhoneOS: true
+        # Allows detecting whether ImageKid is installed (for "Edit in ImageKid").
+        LSApplicationQueriesSchemes:
+          - imagekid
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

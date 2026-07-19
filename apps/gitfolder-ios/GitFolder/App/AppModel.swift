@@ -20,8 +20,12 @@ final class AppModel {
     var repos: [GitRepository] = []
     var isLoadingRepos = false
 
-    // MARK: Active repository
-    var activeRepo: GitRepository?
+    // MARK: Repositories (added "folders" + the open one)
+    /// Repositories the user has added — shown on the home screen like local folders.
+    var addedRepos: [RepoRef] = []
+    /// The currently open repository (nil = showing the home list). Persisted so the
+    /// app reopens the same repo on next launch.
+    var activeRepo: RepoRef?
     var isSaving = false
 
     // MARK: Status
@@ -37,6 +41,8 @@ final class AppModel {
     )
     @ObservationIgnored private let defaults = UserDefaults.standard
     @ObservationIgnored private let connectionKey = "gitfolder.connection"
+    @ObservationIgnored private let addedReposKey = "gitfolder.addedRepos"
+    @ObservationIgnored private let activeRepoKey = "gitfolder.activeRepo"
 
     private struct StoredConnection: Codable {
         let choice: ProviderChoice
@@ -47,11 +53,18 @@ final class AppModel {
 
     func restore() async {
         defer { isRestoring = false }
+        loadAddedRepos()
         guard let data = defaults.data(forKey: connectionKey),
               let stored = try? JSONDecoder().decode(StoredConnection.self, from: data),
               let token = ((try? keychain.load()) ?? nil)?.trimmingCharacters(in: .whitespacesAndNewlines),
               !token.isEmpty else { return }
         await connect(choice: stored.choice, serverURL: stored.serverURL, token: token, persist: false)
+        // Reopen the last repository so closing and reopening the app lands in the
+        // same place instead of the home list.
+        if isConnected, let saved = defaults.string(forKey: activeRepoKey),
+           let ref = addedRepos.first(where: { $0.fullName == saved }) {
+            openRepo(ref)
+        }
     }
 
     // MARK: - Connect
@@ -194,8 +207,11 @@ final class AppModel {
     func signOut() {
         try? keychain.delete()
         defaults.removeObject(forKey: connectionKey)
+        defaults.removeObject(forKey: addedReposKey)
+        defaults.removeObject(forKey: activeRepoKey)
         connection = nil
         repos = []
+        addedRepos = []
         activeRepo = nil
         client = nil
     }
@@ -221,16 +237,53 @@ final class AppModel {
 
     // MARK: - Open / close a repository
 
-    func openRepo(_ repo: GitRepository) {
+    /// Add a repository to the home list (like adding a folder) and open it.
+    func addRepo(_ repo: GitRepository) {
+        let ref = RepoRef(
+            namespace: repo.reference.namespace,
+            name: repo.reference.name,
+            branch: repo.reference.defaultBranch ?? "main",
+            isPrivate: repo.isPrivate
+        )
+        if !addedRepos.contains(where: { $0.id == ref.id }) {
+            addedRepos.append(ref)
+            addedRepos.sort { $0.fullName.localizedCaseInsensitiveCompare($1.fullName) == .orderedAscending }
+            persistAddedRepos()
+        }
+        openRepo(ref)
+    }
+
+    /// Remove a repo from the home list. If it's open, return to the home list.
+    func removeAddedRepo(_ ref: RepoRef) {
+        addedRepos.removeAll { $0.id == ref.id }
+        persistAddedRepos()
+        if activeRepo?.id == ref.id { closeRepo() }
+    }
+
+    func openRepo(_ ref: RepoRef) {
         guard let connection else { return }
-        activeRepo = repo
+        activeRepo = ref
         errorMessage = nil
-        client = RepoFileClient(connection: connection, repo: repo)
+        client = RepoFileClient(connection: connection, ref: ref)
+        defaults.set(ref.fullName, forKey: activeRepoKey)
     }
 
     func closeRepo() {
         activeRepo = nil
         client = nil
+        defaults.removeObject(forKey: activeRepoKey)
+    }
+
+    private func persistAddedRepos() {
+        if let data = try? JSONEncoder().encode(addedRepos) {
+            defaults.set(data, forKey: addedReposKey)
+        }
+    }
+
+    private func loadAddedRepos() {
+        guard let data = defaults.data(forKey: addedReposKey),
+              let saved = try? JSONDecoder().decode([RepoRef].self, from: data) else { return }
+        addedRepos = saved
     }
 
     // MARK: - Files
@@ -243,6 +296,11 @@ final class AppModel {
     func readText(_ path: String) async throws -> String {
         guard let client else { throw GitPontError.invalidProviderResponse("No repository open.") }
         return try await client.readText(path)
+    }
+
+    func readData(_ path: String) async throws -> Data {
+        guard let client else { throw GitPontError.invalidProviderResponse("No repository open.") }
+        return try await client.readData(path)
     }
 
     /// Save a file's text as one commit. Returns true on success.
