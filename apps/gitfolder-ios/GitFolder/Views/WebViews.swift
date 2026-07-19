@@ -82,24 +82,35 @@ struct MarkdownWebView: View {
     }
 }
 
-/// Renders SVG source (text) in a WKWebView, scaled to fit.
+/// Renders SVG source (text) in a WKWebView, scaled to fit, on a checkerboard
+/// background so transparent/black artwork stays visible.
 struct SVGWebView: UIViewRepresentable {
     let svg: String
 
     func makeUIView(context: Context) -> WKWebView {
         let webView = WKWebView()
-        webView.isOpaque = false
-        webView.backgroundColor = .clear
-        webView.scrollView.backgroundColor = .clear
+        webView.isOpaque = true
         return webView
     }
 
     func updateUIView(_ webView: WKWebView, context: Context) {
         let html = """
         <!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=4">
-        <style>html,body{margin:0;height:100%;background:transparent}
+        <style>
+        html,body{margin:0;height:100%}
+        body{
+          background-color:#fff;
+          background-image:
+            linear-gradient(45deg,#d0d0d0 25%,transparent 25%),
+            linear-gradient(-45deg,#d0d0d0 25%,transparent 25%),
+            linear-gradient(45deg,transparent 75%,#d0d0d0 75%),
+            linear-gradient(-45deg,transparent 75%,#d0d0d0 75%);
+          background-size:20px 20px;
+          background-position:0 0,0 10px,10px -10px,-10px 0px;
+        }
         .wrap{display:flex;align-items:center;justify-content:center;height:100vh;padding:12px;box-sizing:border-box}
-        svg,img{max-width:100%;max-height:100%;height:auto}</style></head>
+        svg,img{max-width:100%;max-height:100%;height:auto}
+        </style></head>
         <body><div class="wrap">\(svg)</div></body></html>
         """
         webView.loadHTMLString(html, baseURL: nil)
