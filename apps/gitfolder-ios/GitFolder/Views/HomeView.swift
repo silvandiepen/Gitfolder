@@ -36,7 +36,9 @@ struct HomeView: View {
                                 }
                                 Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
                             }
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
                         .swipeActions(edge: .trailing) {
                             Button(role: .destructive) {
                                 model.removeAddedRepo(ref)

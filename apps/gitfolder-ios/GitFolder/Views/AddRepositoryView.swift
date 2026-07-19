@@ -33,7 +33,9 @@ struct AddRepositoryView: View {
                             Spacer()
                             Image(systemName: "plus.circle").foregroundStyle(.tint)
                         }
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                 }
                 .searchable(text: $search, prompt: "Filter repositories")
                 .refreshable { await model.loadRepos() }
