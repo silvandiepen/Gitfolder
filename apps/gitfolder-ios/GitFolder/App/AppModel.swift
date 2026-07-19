@@ -30,6 +30,18 @@ final class AppModel {
 
     // MARK: Status
     var errorMessage: String?
+    /// A transient message shown as a toast (e.g. a background operation failed).
+    var toast: String?
+
+    /// Show a toast for a few seconds.
+    func showToast(_ message: String) {
+        toast = message
+        let shown = message
+        Task {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            if toast == shown { toast = nil }
+        }
+    }
 
     var isConnected: Bool { connection != nil }
 

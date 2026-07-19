@@ -12,6 +12,28 @@ struct FileBrowserRoot: View {
                     DirectoryView(path: folder.path, title: folder.name, isRoot: false)
                 }
         }
+        .overlay(alignment: .bottom) {
+            if let toast = model.toast {
+                ToastView(text: toast)
+                    .padding(.horizontal, 16).padding(.bottom, 28)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: model.toast)
+    }
+}
+
+/// A small transient message pinned to the bottom.
+struct ToastView: View {
+    let text: String
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
+            Text(text).font(.callout).foregroundStyle(.white).lineLimit(2)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
+        .background(.black.opacity(0.85), in: Capsule())
+        .shadow(radius: 8, y: 4)
     }
 }
 
@@ -97,7 +119,7 @@ struct DirectoryView: View {
                 TextField("name.md", text: $newFileName)
                     .textInputAutocapitalization(.never).autocorrectionDisabled()
                 Button("Cancel", role: .cancel) { newFileName = "" }
-                Button("Create") { Task { await createFile() } }
+                Button("Create") { createFile() }
             } message: {
                 Text("Creates and commits a new file in this folder.")
             }
@@ -105,15 +127,12 @@ struct DirectoryView: View {
                 TextField("name", text: $renameText)
                     .textInputAutocapitalization(.never).autocorrectionDisabled()
                 Button("Cancel", role: .cancel) { renameTarget = nil }
-                Button("Rename") { Task { await performRename() } }
+                Button("Rename") { performRename() }
             }
             .sheet(item: $shareItem) { item in ShareSheet(items: [item.url]) }
             .sheet(item: $moveFolderTarget) { folder in
                 FolderPickerView(movingPath: folder.path) { destParent in
-                    Task {
-                        let dest = destParent.isEmpty ? folder.name : "\(destParent)/\(folder.name)"
-                        if await model.moveFolder(from: folder.path, to: dest) { await reload() }
-                    }
+                    moveFolder(folder, toParent: destParent)
                 }
                 .environment(model)
             }
@@ -123,10 +142,7 @@ struct DirectoryView: View {
                 titleVisibility: .visible
             ) {
                 Button("Delete Folder", role: .destructive) {
-                    if let folder = deleteFolderTarget {
-                        deleteFolderTarget = nil
-                        Task { if await model.deleteFolder(folder.path) { await reload() } }
-                    }
+                    if let folder = deleteFolderTarget { deleteFolderTarget = nil; deleteEntry(folder) }
                 }
                 Button("Cancel", role: .cancel) { deleteFolderTarget = nil }
             }
@@ -223,16 +239,16 @@ struct DirectoryView: View {
         Button { Task { await shareFile(entry) } } label: {
             Label("Share / Export…", systemImage: "square.and.arrow.up")
         }
-        Button { Task { await duplicate(entry) } } label: {
+        Button { duplicate(entry) } label: {
             Label("Duplicate", systemImage: "plus.square.on.square")
         }
         Button { renameText = entry.name; renameTarget = entry } label: {
             Label("Rename…", systemImage: "pencil")
         }
         Divider()
-        Button(role: .destructive) {
-            Task { if await model.delete(path: entry.path) { await reload() } }
-        } label: { Label("Delete", systemImage: "trash") }
+        Button(role: .destructive) { deleteEntry(entry) } label: {
+            Label("Delete", systemImage: "trash")
+        }
     }
 
     @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
@@ -266,11 +282,78 @@ struct DirectoryView: View {
         isLoading = false
     }
 
-    private func createFile() async {
+    // The mutating actions below are OPTIMISTIC: the list updates immediately and the
+    // git work runs in the background. If it fails, we reload from disk and toast.
+
+    private func createFile() {
         let name = newFileName.trimmingCharacters(in: .whitespacesAndNewlines)
         newFileName = ""
         guard !name.isEmpty else { return }
-        if await model.createFile(path: join(name), text: "") { await reload() }
+        let path = join(name)
+        withAnimation { insertSorted(RepoEntry(name: name, path: path, isDirectory: false)) }
+        Task {
+            if !(await model.createFile(path: path, text: "")) {
+                model.showToast("Couldn't create \(name)"); await reload()
+            }
+        }
+    }
+
+    private func duplicate(_ entry: RepoEntry) {
+        let newName = uniqueCopyName(for: entry.name)
+        let newPath = join(newName)
+        withAnimation { insertSorted(RepoEntry(name: newName, path: newPath, isDirectory: false)) }
+        Task {
+            guard let data = try? await model.readData(entry.path),
+                  await model.writeData(path: newPath, data: data, message: "Duplicate \(entry.name)") else {
+                model.showToast("Couldn't duplicate \(entry.name)"); await reload(); return
+            }
+        }
+    }
+
+    private func deleteEntry(_ entry: RepoEntry) {
+        withAnimation { entries.removeAll { $0.id == entry.id } }
+        Task {
+            let ok = entry.isDirectory ? await model.deleteFolder(entry.path) : await model.delete(path: entry.path)
+            if !ok { model.showToast("Couldn't delete \(entry.name)"); await reload() }
+        }
+    }
+
+    private func performRename() {
+        guard let entry = renameTarget else { return }
+        let newName = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
+        renameTarget = nil
+        guard !newName.isEmpty, newName != entry.name else { return }
+        let parent = (entry.path as NSString).deletingLastPathComponent
+        let newPath = parent.isEmpty ? newName : "\(parent)/\(newName)"
+        withAnimation {
+            if let i = entries.firstIndex(where: { $0.id == entry.id }) {
+                entries[i] = RepoEntry(name: newName, path: newPath, isDirectory: entry.isDirectory)
+            }
+        }
+        Task {
+            let ok: Bool
+            if entry.isDirectory {
+                ok = await model.moveFolder(from: entry.path, to: newPath)
+            } else if let data = try? await model.readData(entry.path) {
+                let wrote = await model.writeData(path: newPath, data: data, message: "Rename \(entry.name) to \(newName)")
+                if wrote { _ = await model.delete(path: entry.path) }
+                ok = wrote
+            } else {
+                ok = false
+            }
+            if !ok { model.showToast("Couldn't rename \(entry.name)"); await reload() }
+        }
+    }
+
+    private func moveFolder(_ folder: RepoEntry, toParent destParent: String) {
+        let dest = destParent.isEmpty ? folder.name : "\(destParent)/\(folder.name)"
+        guard dest != folder.path else { return }  // same place
+        withAnimation { entries.removeAll { $0.id == folder.id } }
+        Task {
+            if !(await model.moveFolder(from: folder.path, to: dest)) {
+                model.showToast("Couldn't move \(folder.name)"); await reload()
+            }
+        }
     }
 
     private func shareFile(_ entry: RepoEntry) async {
@@ -280,29 +363,12 @@ struct DirectoryView: View {
         shareItem = ShareItem(url: url)
     }
 
-    private func duplicate(_ entry: RepoEntry) async {
-        guard let data = try? await model.readData(entry.path) else { return }
-        let newName = uniqueCopyName(for: entry.name)
-        if await model.writeData(path: join(newName), data: data, message: "Duplicate \(entry.name)") {
-            await reload()
-        }
-    }
-
-    private func performRename() async {
-        guard let entry = renameTarget else { return }
-        let newName = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
-        renameTarget = nil
-        guard !newName.isEmpty, newName != entry.name else { return }
-        if entry.isDirectory {
-            let parent = (entry.path as NSString).deletingLastPathComponent
-            let dest = parent.isEmpty ? newName : "\(parent)/\(newName)"
-            if await model.moveFolder(from: entry.path, to: dest) { await reload() }
-        } else {
-            guard let data = try? await model.readData(entry.path) else { return }
-            if await model.writeData(path: join(newName), data: data, message: "Rename \(entry.name) to \(newName)") {
-                _ = await model.delete(path: entry.path)
-                await reload()
-            }
+    private func insertSorted(_ entry: RepoEntry) {
+        guard !entries.contains(where: { $0.id == entry.id }) else { return }
+        entries.append(entry)
+        entries.sort { a, b in
+            if a.isDirectory != b.isDirectory { return a.isDirectory && !b.isDirectory }
+            return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
         }
     }
 

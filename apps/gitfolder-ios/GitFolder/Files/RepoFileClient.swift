@@ -107,11 +107,16 @@ struct RepoFileClient {
         _ = try await provider.commitFile(change, context: context)
     }
 
-    /// Delete a file in one commit. Fetches the current version first (providers that
-    /// require the blob sha to delete), falling back to a blind delete.
+    /// Delete a file in one commit. GitHub requires the blob sha; git-pont can't return
+    /// it for large/binary files, so fetch it directly from the contents API.
     func delete(path: String, message: String) async throws {
         let reference = GitFileReference(repository: repository, path: path, ref: ref)
-        let version = try? await provider.readFile(reference, context: context).version
+        var version: GitRemoteVersion?
+        if connection.choice == .github, let sha = await gitHubBlobSHA(path) {
+            version = .blobSHA(sha)
+        } else {
+            version = try? await provider.readFile(reference, context: context).version
+        }
         let request = GitFileDeleteRequest(
             reference: reference,
             message: message,
@@ -120,5 +125,28 @@ struct RepoFileClient {
             allowBlindOverwrite: version == nil
         )
         _ = try await provider.deleteFile(request, context: context)
+    }
+
+    /// The blob sha for a file via GitHub's contents API (returned even for large files
+    /// where the base64 content is omitted).
+    private func gitHubBlobSHA(_ path: String) async -> String? {
+        var url = connection.instance.apiBaseURL
+            .appendingPathComponent("repos")
+            .appendingPathComponent(repoRef.namespace)
+            .appendingPathComponent(repoRef.name)
+            .appendingPathComponent("contents")
+        for segment in path.split(separator: "/") { url = url.appendingPathComponent(String(segment)) }
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "ref", value: ref)]
+        guard let requestURL = components?.url else { return nil }
+        var request = URLRequest(url: requestURL)
+        request.setValue("Bearer \(connection.token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
+        struct ContentDTO: Decodable { let sha: String? }
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let dto = try? JSONDecoder().decode(ContentDTO.self, from: data) else { return nil }
+        return dto.sha
     }
 }
