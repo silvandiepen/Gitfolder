@@ -65,7 +65,7 @@ struct CardDetailSheet: View {
                 if card.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text("No description.").font(.body).foregroundStyle(.secondary)
                 } else {
-                    MarkdownView(text: card.body)
+                    MarkdownWebView(markdown: card.body)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
