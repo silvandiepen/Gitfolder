@@ -198,10 +198,12 @@ struct DirectoryView: View {
 
     @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
         ToolbarItemGroup(placement: .topBarTrailing) {
-            Picker("Layout", selection: $layoutRaw) {
-                ForEach(BrowseLayout.allCases) { l in Image(systemName: l.icon).tag(l.rawValue) }
+            Button {
+                layoutRaw = (layout == .list ? BrowseLayout.tiles : .list).rawValue
+            } label: {
+                Image(systemName: layout == .list ? "square.grid.2x2" : "list.bullet")
             }
-            .pickerStyle(.segmented).frame(width: 96)
+            .help(layout == .list ? "Switch to tiles" : "Switch to list")
 
             Menu {
                 Button { showNewFile = true } label: { Label("New File", systemImage: "doc.badge.plus") }
