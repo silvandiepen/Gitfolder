@@ -1,25 +1,24 @@
 import SwiftUI
 
 /// The file browser for the open repository: a navigation stack rooted at the repo
-/// root, pushing a `DirectoryView` for folders, an image viewer for images, and a
-/// `FileEditorView` for other files.
+/// root. Folders push another `DirectoryView`; files open (image viewer or editor).
 struct FileBrowserRoot: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
         NavigationStack {
             DirectoryView(path: "", title: model.activeRepo?.fullName ?? "Files", isRoot: true)
-                .navigationDestination(for: RepoEntry.self) { entry in
-                    if entry.isDirectory {
-                        DirectoryView(path: entry.path, title: entry.name, isRoot: false)
-                    } else if FileKind.isRasterImage(entry.name) {
-                        ImageViewerView(path: entry.path, name: entry.name)
-                    } else {
-                        FileEditorView(path: entry.path, name: entry.name)
-                    }
+                .navigationDestination(for: RepoEntry.self) { folder in
+                    DirectoryView(path: folder.path, title: folder.name, isRoot: false)
                 }
         }
     }
+}
+
+/// A file to open, and whether to start in edit mode.
+struct FileOpen: Hashable {
+    let entry: RepoEntry
+    var edit: Bool
 }
 
 /// File-type helpers shared across the browser.
@@ -30,7 +29,6 @@ enum FileKind {
             .contains { l.hasSuffix($0) }
     }
     static func isSVG(_ name: String) -> Bool { name.lowercased().hasSuffix(".svg") }
-    /// Raster images we can thumbnail with UIImage (everything but SVG).
     static func isRasterImage(_ name: String) -> Bool { isImage(name) && !isSVG(name) }
 
     static func icon(_ name: String, isDirectory: Bool) -> String {
@@ -57,8 +55,9 @@ enum BrowseLayout: String, CaseIterable, Identifiable {
     }
 }
 
-/// One directory's listing, shown as a List, Tiles, or Columns. Folders navigate,
-/// files open; supports adding a new file and deleting a file.
+/// One directory's listing, shown as a List, Tiles, or Columns. Folders navigate; a
+/// tap opens a file; long-press gives a file's actions (open/edit/share/duplicate/
+/// rename/delete). New files can be added.
 struct DirectoryView: View {
     @Environment(AppModel.self) private var model
     let path: String
@@ -74,6 +73,9 @@ struct DirectoryView: View {
     @State private var showNewFile = false
     @State private var newFileName = ""
     @State private var shareItem: ShareItem?
+    @State private var fileTarget: FileOpen?
+    @State private var renameTarget: RepoEntry?
+    @State private var renameText = ""
 
     var body: some View {
         content
@@ -83,18 +85,28 @@ struct DirectoryView: View {
             .refreshable { await reload() }
             .task { await reload() }
             .toolbar { toolbarContent }
+            .navigationDestination(item: $fileTarget) { target in
+                if FileKind.isRasterImage(target.entry.name) {
+                    ImageViewerView(path: target.entry.path, name: target.entry.name)
+                } else {
+                    FileEditorView(path: target.entry.path, name: target.entry.name, startEditing: target.edit)
+                }
+            }
             .alert("New File", isPresented: $showNewFile) {
                 TextField("name.md", text: $newFileName)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
                 Button("Cancel", role: .cancel) { newFileName = "" }
                 Button("Create") { Task { await createFile() } }
             } message: {
                 Text("Creates and commits a new file in this folder.")
             }
-            .sheet(item: $shareItem) { item in
-                ShareSheet(items: [item.url])
+            .alert("Rename", isPresented: Binding(get: { renameTarget != nil }, set: { if !$0 { renameTarget = nil } })) {
+                TextField("name", text: $renameText)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                Button("Cancel", role: .cancel) { renameTarget = nil }
+                Button("Rename") { Task { await performRename() } }
             }
+            .sheet(item: $shareItem) { item in ShareSheet(items: [item.url]) }
     }
 
     // MARK: Layouts
@@ -116,7 +128,7 @@ struct DirectoryView: View {
                 }
             }
             ForEach(entries) { entry in
-                NavigationLink(value: entry) {
+                row(entry) {
                     Label {
                         Text(entry.name)
                     } icon: {
@@ -124,8 +136,6 @@ struct DirectoryView: View {
                             .foregroundStyle(entry.isDirectory ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                     }
                 }
-                .swipeActions(edge: .trailing) { deleteButton(entry) }
-                .contextMenu { fileActions(entry) }
             }
             if !isLoading && entries.isEmpty && loadError == nil {
                 Text("Empty folder").foregroundStyle(.secondary)
@@ -146,49 +156,54 @@ struct DirectoryView: View {
             }
             LazyVGrid(columns: columns, spacing: spacing) {
                 ForEach(entries) { entry in
-                    NavigationLink(value: entry) { cell(entry) }
-                        .buttonStyle(.plain)
-                        .contextMenu { fileActions(entry) }
+                    row(entry) { cell(entry) }
                 }
             }
             .padding(16)
         }
     }
 
-    @ViewBuilder private func deleteButton(_ entry: RepoEntry) -> some View {
-        if !entry.isDirectory {
-            Button(role: .destructive) {
-                Task { if await model.delete(path: entry.path) { await reload() } }
-            } label: { Label("Delete", systemImage: "trash") }
+    /// A row/cell: folders navigate; files open on tap and expose actions on long-press.
+    @ViewBuilder private func row<Content: View>(_ entry: RepoEntry, @ViewBuilder content: () -> Content) -> some View {
+        if entry.isDirectory {
+            NavigationLink(value: entry) { content() }
+        } else {
+            Button { fileTarget = FileOpen(entry: entry, edit: false) } label: { content() }
+                .buttonStyle(.plain)
+                .contextMenu { fileActions(entry) }
         }
     }
 
-    /// Context-menu actions for a file: share/export, then delete.
     @ViewBuilder private func fileActions(_ entry: RepoEntry) -> some View {
-        if !entry.isDirectory {
-            Button {
-                Task { await shareFile(entry) }
-            } label: { Label("Share / Export…", systemImage: "square.and.arrow.up") }
-            deleteButton(entry)
+        Button { fileTarget = FileOpen(entry: entry, edit: false) } label: {
+            Label(FileKind.isRasterImage(entry.name) ? "View" : "Open", systemImage: "eye")
         }
-    }
-
-    private func shareFile(_ entry: RepoEntry) async {
-        guard let data = try? await model.readData(entry.path) else { return }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(entry.name)
-        guard (try? data.write(to: url)) != nil else { return }
-        shareItem = ShareItem(url: url)
+        if !FileKind.isRasterImage(entry.name) {
+            Button { fileTarget = FileOpen(entry: entry, edit: true) } label: {
+                Label("Edit", systemImage: "square.and.pencil")
+            }
+        }
+        Button { Task { await shareFile(entry) } } label: {
+            Label("Share / Export…", systemImage: "square.and.arrow.up")
+        }
+        Button { Task { await duplicate(entry) } } label: {
+            Label("Duplicate", systemImage: "plus.square.on.square")
+        }
+        Button { renameText = entry.name; renameTarget = entry } label: {
+            Label("Rename…", systemImage: "pencil")
+        }
+        Divider()
+        Button(role: .destructive) {
+            Task { if await model.delete(path: entry.path) { await reload() } }
+        } label: { Label("Delete", systemImage: "trash") }
     }
 
     @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .principal) {
             Picker("Layout", selection: $layoutRaw) {
-                ForEach(BrowseLayout.allCases) { l in
-                    Image(systemName: l.icon).tag(l.rawValue)
-                }
+                ForEach(BrowseLayout.allCases) { l in Image(systemName: l.icon).tag(l.rawValue) }
             }
-            .pickerStyle(.segmented)
-            .frame(width: 150)
+            .pickerStyle(.segmented).frame(width: 150)
         }
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
@@ -204,16 +219,12 @@ struct DirectoryView: View {
         }
     }
 
-    // MARK: Data
+    // MARK: Actions
 
     private func reload() async {
         isLoading = true
         loadError = nil
-        do {
-            entries = try await model.list(path)
-        } catch {
-            loadError = error.localizedDescription
-        }
+        do { entries = try await model.list(path) } catch { loadError = error.localizedDescription }
         isLoading = false
     }
 
@@ -221,7 +232,47 @@ struct DirectoryView: View {
         let name = newFileName.trimmingCharacters(in: .whitespacesAndNewlines)
         newFileName = ""
         guard !name.isEmpty else { return }
-        let fullPath = path.isEmpty ? name : "\(path)/\(name)"
-        if await model.createFile(path: fullPath, text: "") { await reload() }
+        if await model.createFile(path: join(name), text: "") { await reload() }
+    }
+
+    private func shareFile(_ entry: RepoEntry) async {
+        guard let data = try? await model.readData(entry.path) else { return }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(entry.name)
+        guard (try? data.write(to: url)) != nil else { return }
+        shareItem = ShareItem(url: url)
+    }
+
+    private func duplicate(_ entry: RepoEntry) async {
+        guard let data = try? await model.readData(entry.path) else { return }
+        let newName = uniqueCopyName(for: entry.name)
+        if await model.writeData(path: join(newName), data: data, message: "Duplicate \(entry.name)") {
+            await reload()
+        }
+    }
+
+    private func performRename() async {
+        guard let entry = renameTarget else { return }
+        let newName = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
+        renameTarget = nil
+        guard !newName.isEmpty, newName != entry.name else { return }
+        guard let data = try? await model.readData(entry.path) else { return }
+        if await model.writeData(path: join(newName), data: data, message: "Rename \(entry.name) to \(newName)") {
+            _ = await model.delete(path: entry.path)
+            await reload()
+        }
+    }
+
+    private func join(_ name: String) -> String { path.isEmpty ? name : "\(path)/\(name)" }
+
+    private func uniqueCopyName(for name: String) -> String {
+        let ns = name as NSString
+        let ext = ns.pathExtension
+        let base = ns.deletingPathExtension
+        let existing = Set(entries.map(\.name))
+        func make(_ suffix: String) -> String { ext.isEmpty ? "\(base)\(suffix)" : "\(base)\(suffix).\(ext)" }
+        var candidate = make(" copy")
+        var n = 2
+        while existing.contains(candidate) { candidate = make(" copy \(n)"); n += 1 }
+        return candidate
     }
 }

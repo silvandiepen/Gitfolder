@@ -7,6 +7,7 @@ struct FileEditorView: View {
     @Environment(AppModel.self) private var model
     let path: String
     let name: String
+    var startEditing: Bool = false
 
     @State private var text = ""
     @State private var original = ""
@@ -88,7 +89,7 @@ struct FileEditorView: View {
             text = loaded
             original = loaded
             if !seededMode {
-                editing = !hasPreview  // preview by default for md/svg, edit otherwise
+                editing = startEditing || !hasPreview  // preview by default for md/svg
                 seededMode = true
             }
         } catch {

@@ -325,6 +325,22 @@ final class AppModel {
         await save(path: path, text: text, message: "Create \(path)")
     }
 
+    /// Write raw bytes to a path as one commit (used by Duplicate). Returns true on success.
+    @discardableResult
+    func writeData(path: String, data: Data, message: String) async -> Bool {
+        guard let client else { return false }
+        isSaving = true
+        errorMessage = nil
+        defer { isSaving = false }
+        do {
+            try await client.writeData(path: path, data: data, message: message)
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
     /// Delete a file. Returns true on success.
     @discardableResult
     func delete(path: String) async -> Bool {
