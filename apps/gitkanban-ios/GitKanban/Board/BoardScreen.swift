@@ -10,6 +10,9 @@ struct BoardScreen: View {
     @Environment(AppModel.self) private var model
     @State private var showNewProject = false
     @State private var settingsProject: BoardProject?
+    @State private var setupProject: BoardProject?
+    @State private var setupConfig: DetectedBoardConfig?
+    @State private var offeredSetup: Set<String> = []
 
     private var projects: [BoardProject] { model.workspace?.projects ?? [] }
 
@@ -37,6 +40,8 @@ struct BoardScreen: View {
         .sheet(isPresented: $model.isShowingSearch) { SearchSheet().environment(model) }
         .sheet(isPresented: $showNewProject) { ProjectSheet(editing: nil).environment(model) }
         .sheet(item: $settingsProject) { project in ProjectSheet(editing: project).environment(model) }
+        .sheet(item: $setupProject) { project in ProjectSheet(editing: project, prefill: setupConfig).environment(model) }
+        .task(id: model.selectedProject?.id) { await maybeOfferSetup() }
     }
 
     @ViewBuilder private var savingBanner: some View {
@@ -63,6 +68,16 @@ struct BoardScreen: View {
             filterMenu
             overflowMenu
         }
+    }
+
+    /// If a board opens unconfigured (cards but no matching lanes), detect a config and
+    /// present the setup sheet prefilled — once per board.
+    private func maybeOfferSetup() async {
+        guard model.boardNeedsSetup, let project = model.selectedProject,
+              !offeredSetup.contains(project.id) else { return }
+        offeredSetup.insert(project.id)
+        setupConfig = await model.detectConfig(for: project)
+        setupProject = project
     }
 
     /// The first real (non-backlog) lane — the default target for the header + button.

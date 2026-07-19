@@ -8,6 +8,8 @@ struct ProjectSheet: View {
     @Environment(\.dismiss) private var dismiss
     /// nil = create a new project; non-nil = edit that project's settings.
     var editing: BoardProject?
+    /// When set, prefill the form from an auto-detected config (board setup flow).
+    var prefill: DetectedBoardConfig?
 
     @State private var name = ""
     @State private var description = ""
@@ -139,7 +141,7 @@ struct ProjectSheet: View {
                     Section { Text(error).font(.callout).foregroundStyle(.red) }
                 }
             }
-            .navigationTitle(isEditing ? "Project Settings" : "New Project")
+            .navigationTitle(prefill != nil ? "Set Up Board" : (isEditing ? "Project Settings" : "New Project"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -156,8 +158,18 @@ struct ProjectSheet: View {
     private func seed() {
         guard !seeded else { return }
         seeded = true
-        guard editing != nil, let config = model.board?.config else { return }
-        name = config.project ?? editing?.name ?? ""
+        guard let editing else { return }
+        if let prefill {
+            name = model.board?.config.project ?? editing.name
+            laneItems = prefill.lanes.map { LaneItem(name: $0.name, origin: $0) }
+            priorityItems = prefill.priorities.map { TextItem(text: $0.id) }
+            memberItems = prefill.users.map { TextItem(text: $0.id) }
+            typeItems = prefill.types.map { TextItem(text: $0) }
+            epicItems = prefill.epics.map { EpicItem(name: $0.name ?? $0.id, origin: $0) }
+            return
+        }
+        guard let config = model.board?.config else { return }
+        name = config.project ?? editing.name
         laneItems = config.lanes.map { LaneItem(name: $0.name, origin: $0) }
         priorityItems = config.priorities.map { TextItem(text: $0.id) }
         memberItems = config.users.map { TextItem(text: $0.id) }

@@ -149,6 +149,12 @@ public enum RemoteBoardStore {
         return (project, rootConfig, board)
     }
 
+    /// Load the cards in a directory (no config needed) — used to auto-detect a board's
+    /// structure from its folders and card fields.
+    public static func cards(source: BoardFileSource, dir: String) async throws -> [Card] {
+        try await loadCards(source: source, dir: dir, fieldSource: nil)
+    }
+
     /// Count the cards in a board without reading their contents — just list each lane
     /// folder and count card files. Used for the boards list's "N tasks" summary.
     public static func taskCount(source: BoardFileSource, folder: String) async throws -> Int {

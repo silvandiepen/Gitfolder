@@ -1,4 +1,14 @@
 import Foundation
+import GitKit
+
+/// A config inferred from a board's folders + card fields, used to prefill the setup sheet.
+struct DetectedBoardConfig {
+    var lanes: [Lane] = []
+    var priorities: [Priority] = []
+    var users: [User] = []
+    var types: [String] = []
+    var epics: [Epic] = []
+}
 
 /// A board the user selected within a repo — a project folder path, its display name,
 /// and a small summary shown in the boards list.

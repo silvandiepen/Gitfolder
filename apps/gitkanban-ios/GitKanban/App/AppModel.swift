@@ -231,6 +231,59 @@ final class AppModel {
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
+    /// Whether the open board looks unconfigured — cards exist but no lane matched them.
+    var boardNeedsSetup: Bool {
+        guard let board else { return false }
+        return board.config.lanes.isEmpty && !board.uncategorised.isEmpty
+    }
+
+    /// Infer a project config for a board from its folder structure and card fields:
+    /// each subfolder becomes a lane (status from the cards, or the folder name), and
+    /// priorities/types/members/epics are collected from the cards. Used to prefill the
+    /// setup sheet; saving writes it into the board's README.
+    func detectConfig(for project: BoardProject) async -> DetectedBoardConfig {
+        guard let source else { return DetectedBoardConfig() }
+        let entries = (try? await source.list(project.folder)) ?? []
+        let subdirs = entries
+            .filter { $0.kind == .directory && !$0.name.hasPrefix(".") && $0.name != "attachments" }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+
+        var lanes: [Lane] = []
+        var priorities = Set<String>(), types = Set<String>(), members = Set<String>(), epics = Set<String>()
+
+        for dir in subdirs {
+            let cards = (try? await RemoteBoardStore.cards(source: source, dir: dir.path)) ?? []
+            let name = prettyLaneName(dir.name)
+            let statuses = cards.compactMap { $0.fields.status.isEmpty ? nil : $0.fields.status }
+            let common = Dictionary(grouping: statuses, by: { $0 }).max { $0.value.count < $1.value.count }?.key
+            let status = common ?? slug(name)
+            let isBacklog = dir.name.lowercased().contains("backlog") || status.lowercased().contains("backlog")
+            lanes.append(Lane(id: status, name: name, folder: dir.name, status: status, terminal: nil, backlog: isBacklog ? true : nil))
+            for card in cards {
+                if let p = card.fields.priority, !p.isEmpty { priorities.insert(p) }
+                if let t = card.fields.type, !t.isEmpty { types.insert(t) }
+                if let a = card.fields.assignee, !a.isEmpty { members.insert(a) }
+                if let e = card.fields.epic, !e.isEmpty { epics.insert(e) }
+            }
+        }
+        return DetectedBoardConfig(
+            lanes: lanes,
+            priorities: priorities.sorted().map { Priority(id: $0) },
+            users: members.sorted().map { User(id: $0) },
+            types: types.sorted(),
+            epics: epics.sorted().map { Epic(id: $0) }
+        )
+    }
+
+    /// Strip a leading "N. " ordering prefix from a lane folder name.
+    private func prettyLaneName(_ folder: String) -> String {
+        if let range = folder.range(of: "^\\s*\\d+\\.?\\s*", options: .regularExpression) {
+            let stripped = String(folder[range.upperBound...]).trimmingCharacters(in: .whitespaces)
+            if !stripped.isEmpty { return stripped }
+        }
+        return folder
+    }
+
     // MARK: - Connect
 
     /// Validate a token against the chosen provider, then load its repositories.
@@ -526,7 +579,17 @@ final class AppModel {
         do { try await source.write(path: "\(name)/README.md", text: readme, message: "Create project \(name)") }
         catch { errorMessage = error.localizedDescription }
         isSaving = false
-        await reloadWorkspace(selecting: name)
+        // Add the new project as a board of the active repo and open it.
+        if let repo = activeRepo {
+            if let i = addedRepos.firstIndex(where: { $0.id == repo.id }),
+               !addedRepos[i].boards.contains(where: { $0.folder == name }) {
+                addedRepos[i].boards.append(SelectedBoard(folder: name, name: name))
+                persistAddedRepos()
+            }
+            await openBoard(repo, folder: name)
+        } else {
+            await reloadWorkspace(selecting: name)
+        }
     }
 
     /// Save a project's settings by rewriting its README config (one commit).
@@ -540,7 +603,18 @@ final class AppModel {
         do { try await source.write(path: "\(project.folder)/README.md", text: readme, message: "Update \(name) settings") }
         catch { errorMessage = error.localizedDescription }
         isSaving = false
-        await reloadWorkspace(selecting: project.folder)
+        // Reload the open board with its new config (lanes now match the cards).
+        if let repo = activeRepo, let folder = activeBoardFolder, folder == project.folder {
+            if let ri = addedRepos.firstIndex(where: { $0.id == repo.id }),
+               let bi = addedRepos[ri].boards.firstIndex(where: { $0.folder == folder }) {
+                addedRepos[ri].boards[bi].name = name
+                persistAddedRepos()
+            }
+            boardCounts["\(repo.id)|\(folder)"] = nil
+            await openBoard(repo, folder: folder)
+        } else {
+            await reloadWorkspace(selecting: project.folder)
+        }
     }
 
     /// Reload the workspace and select the project with the given folder (or the first).
