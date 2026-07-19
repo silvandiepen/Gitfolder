@@ -1,30 +1,28 @@
 # GitFolder for iOS
 
-**Status: Planned (no code yet).** This directory is a docs/spec home for the iOS
-counterpart of the shipping GitFolder macOS app. Nothing here is built.
+**Status: Building (v0.1).** A working SwiftUI app under `GitFolder/` that connects to a
+git provider, browses a repository's files, and edits/creates/deletes them — each change
+committed and pushed. Builds and runs on the simulator and on device (app id
+`app.hakobs.gitfolder`).
 
 GitFolder for iOS is a **git-backed folder browser and Markdown editor** for iPhone
-and iPad. The user connects a GitHub account, clones a repository into the app so it
-behaves like a real offline filesystem, browses and manages files, edits Markdown
-(built-in editor, or hand off to **Lezin** when installed), and pushes every change
-back as a git commit.
+and iPad. The user connects a GitHub (or GitLab) account with a personal access token,
+picks a repository, browses and manages its files, edits Markdown (built-in editor with
+a rendered preview), and every save is a git commit pushed back to the remote.
 
-Where the macOS app is a background menu-bar sync utility that shells out to the
-system `git` binary, the iOS app is a foreground file manager — a different app shape
-with a fundamentally different git engine.
-
-## The make-or-break unknown
+## How it talks to git (the make-or-break, resolved)
 
 > **iOS has no `git` binary and no `Process`/subprocess API.**
 
-The macOS engine shells out to `git`; none of that ports. iOS must run git **in-process
-via embedded libgit2** and push over **HTTPS with a GitHub token** (no SSH on iOS). The
-single highest-risk question the whole app depends on is:
+The macOS engine shells out to `git`; none of that ports. Rather than embed libgit2, the
+iOS app uses **[git-pont](https://github.com/silvandiepen/git-pont)** — the hosted
+provider REST API (GitHub/GitLab) over HTTPS with a token. There is **no local clone**:
+directory listings, file reads, and writes (`commitFile` / `deleteFile`, one commit each,
+pushed immediately) all go through the provider API. This is the same transport the
+GitKanban iOS app uses, and it sidesteps the libgit2 question entirely.
 
-> Can an iOS app **clone, commit, pull-rebase, and push** a real GitHub repo over HTTPS
-> with a token, using embedded libgit2, on a device?
-
-A Phase 0 spike (see below) exists to answer this before any UI work begins.
+The original libgit2 offline-clone plan below is superseded by the git-pont approach for
+v0.1; a true offline clone can return later as an enhancement.
 
 ## Where the plan and tasks live
 

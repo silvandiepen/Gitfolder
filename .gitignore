@@ -26,5 +26,11 @@ apps/gitkanban-ios/build/
 apps/gitkanban-ios/*.xcuserdata/
 apps/gitkanban-ios/GitKanban/Info.plist
 apps/gitkanban-ios/GitKanban/GitKanban.entitlements
+apps/gitfolder-ios/*.xcodeproj/
+apps/gitfolder-ios/DerivedData/
+apps/gitfolder-ios/build/
+apps/gitfolder-ios/*.xcuserdata/
+apps/gitfolder-ios/GitFolder/Info.plist
+apps/gitfolder-ios/GitFolder/GitFolder.entitlements
 swift/*/.build/
 .swiftpm/
