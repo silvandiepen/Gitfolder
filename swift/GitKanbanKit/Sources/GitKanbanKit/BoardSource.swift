@@ -93,6 +93,8 @@ actor InMemoryBoardSource: BoardWritable {
             name: "Sil van Diepen"
           - id: alex
             name: "Alex Rivera"
+          - id: mara
+            name: "Mara Chen"
         ---
 
         # Demo Project
@@ -112,9 +114,15 @@ actor InMemoryBoardSource: BoardWritable {
         card("0. Backlog", "DEMO-3", "Keyboard shortcuts", "backlog", priority: "P3", type: "enhancement", assignee: "sil", order: 3)
         card("1. To do", "DEMO-4", "Design onboarding", "to-do", priority: "P1", type: "feature", assignee: "sil", order: 1)
         card("1. To do", "DEMO-5", "Repo picker polish", "to-do", priority: "P2", type: "enhancement", assignee: "alex", order: 2)
+        card("1. To do", "DEMO-9", "Swipe between lanes", "to-do", priority: "P1", type: "feature", assignee: "mara", order: 3)
+        card("1. To do", "DEMO-10", "Empty-state illustrations", "to-do", priority: "P3", type: "enhancement", assignee: nil, order: 4)
         card("2. In Progress", "DEMO-6", "Board rendering", "in-progress", priority: "P0", type: "feature", assignee: "sil", order: 1)
         card("2. In Progress", "DEMO-7", "Card editor", "in-progress", priority: "P1", type: "feature", assignee: "alex", order: 2)
+        card("2. In Progress", "DEMO-11", "Filter by tag and assignee", "in-progress", priority: "P1", type: "feature", assignee: "mara", order: 3)
         card("3. Done", "DEMO-8", "Connect via token", "done", priority: "P0", type: "feature", assignee: "sil", order: 1)
+        card("3. Done", "DEMO-12", "GitHub sign-in flow", "done", priority: "P0", type: "feature", assignee: "mara", order: 2)
+        card("3. Done", "DEMO-13", "Lane reordering", "done", priority: "P1", type: "feature", assignee: "alex", order: 3)
+        card("3. Done", "DEMO-14", "Priority badges", "done", priority: "P2", type: "enhancement", assignee: "sil", order: 4)
 
         return InMemoryBoardSource(files: files)
     }

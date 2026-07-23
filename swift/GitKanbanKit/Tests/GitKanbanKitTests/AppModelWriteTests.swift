@@ -25,7 +25,7 @@ final class AppModelWriteTests: XCTestCase {
         let model = await loaded()
         XCTAssertEqual(model.selectedProject?.name, "Demo Project")
         XCTAssertEqual(model.board?.columns.map(\.lane.id), ["backlog", "to-do", "in-progress", "done"])
-        XCTAssertEqual(cards(model, "to-do").count, 2)
+        XCTAssertEqual(cards(model, "to-do").count, 4)
     }
 
     /// Backlog lanes load lazily (skipped on first board load).
