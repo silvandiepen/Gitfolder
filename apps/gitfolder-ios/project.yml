@@ -43,6 +43,7 @@ targets:
         INFOPLIST_FILE: GitFolder/Info.plist
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     info:
       path: GitFolder/Info.plist
       properties:
