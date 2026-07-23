@@ -9,7 +9,7 @@ options:
 settings:
   base:
     MARKETING_VERSION: "1.1"
-    CURRENT_PROJECT_VERSION: 3
+    CURRENT_PROJECT_VERSION: 4
     SWIFT_VERSION: "5.0"
     DEVELOPMENT_TEAM: "38MGF83L2L"
 
@@ -55,6 +55,7 @@ targets:
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         LSApplicationCategoryType: public.app-category.developer-tools
+        ITSAppUsesNonExemptEncryption: false
         LSMinimumSystemVersion: "14.0"
         LSUIElement: true
         NSHumanReadableCopyright: "Copyright © Sil van Diepen"
