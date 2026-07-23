@@ -2,7 +2,7 @@
 /**
  * @component AppCard
  * Home-page card for one product. Sets [data-app] so it themes itself to the
- * product's brand colour (turquoise / warm red) via --color-accent*.
+ * product's brand colour via --color-accent*.
  */
 import GitFolderMark from './GitFolderMark.vue'
 import GitKanbanMark from './GitKanbanMark.vue'
@@ -22,8 +22,8 @@ defineProps<{
   <article class="app-card" :data-app="app">
     <div class="app-card__head">
       <span class="app-card__mark" aria-hidden="true">
-        <GitFolderMark v-if="app === 'gitfolder'" :size="34" />
-        <GitKanbanMark v-else :size="34" />
+        <GitFolderMark v-if="app === 'gitfolder'" :size="60" />
+        <GitKanbanMark v-else :size="60" />
       </span>
       <span v-if="badge" class="mkt__badge">{{ badge }}</span>
     </div>
@@ -81,13 +81,8 @@ defineProps<{
 
   &__mark {
     display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 60px;
-    height: 60px;
-    border-radius: var(--border-radius-xxl);
-    background: var(--color-accent-tint);
-    color: var(--accent-legible);
+    box-shadow: var(--shadow-s);
+    border-radius: 22%;
   }
 
   &__name {

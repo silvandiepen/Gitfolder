@@ -3,8 +3,8 @@
 // One source of truth for the container, buttons, hero, feature cards, section
 // headings, badges and CTA band used by the home + product pages. Everything is
 // driven by @sil/ui tokens + --color-accent*, so a page/section that sets
-// [data-app] themes itself automatically (turquoise = GitFolder, warm red =
-// GitKanban, slate = shell).
+// [data-app] themes itself automatically (GitFolder green, GitKanban orange,
+// slate = shell).
 // ==========================================================================
 
 @use 'mixins' as *;
@@ -185,32 +185,15 @@
     flex-wrap: wrap;
   }
 
-  // Decorative brand-tinted panel behind hero artwork.
+  // Hero artwork is the app-icon SVG itself.
   @include e(hero-art) {
-    position: relative;
     min-height: 300px;
     display: grid;
     place-items: center;
-    color: var(--color-accent);
-
-    &::before {
-      content: '';
-      position: absolute;
-      inset: var(--space-s);
-      border-radius: var(--border-radius-xxl);
-      background:
-        radial-gradient(circle at 26% 20%, color-mix(in srgb, var(--color-accent) 24%, transparent), transparent 42%),
-        linear-gradient(140deg, color-mix(in srgb, var(--color-accent) 16%, var(--surface)), var(--surface));
-      border: var(--border-width) solid var(--color-border-light);
-      box-shadow: var(--shadow-l);
-    }
   }
 
   @include e(hero-mark) {
-    position: relative;
-    z-index: 1;
-    color: var(--color-accent);
-    filter: drop-shadow(0 16px 32px color-mix(in srgb, var(--color-accent) 30%, transparent));
+    box-shadow: var(--shadow-l);
   }
 
   // ── Feature grid + cards ─────────────────────────────────────────────

@@ -11,7 +11,7 @@
 //   2. sets GitKit's neutral surfaces + the two app brand palettes (the single
 //      source of brand hex);
 //   3. remaps the generic --color-accent* per [data-app] so shared styles theme
-//      themselves (turquoise = GitFolder, warm red = GitKanban, slate = shell).
+//      themselves (GitFolder green, GitKanban orange, slate = shell).
 // ==========================================================================
 
 :root {
@@ -93,17 +93,23 @@
   --gitkit-dark: #1b222b;
   --gitkit-tint: #eef0f3;
 
-  // GitFolder — turquoise
-  --gf: #0fb5a6;
-  --gf-light: #2dd4c0;
-  --gf-dark: #0a6f66;
-  --gf-tint: #e6f7f4;
+  // GitFolder — app icon background from project-assets/GitKit/assets/icon.svg
+  --gf: #bbd757;
+  --gf-light: #d7e986;
+  --gf-dark: #64a043;
+  --gf-tint: #f2f8dd;
 
-  // GitKanban — warm red / orange
-  --gk: #ef5b3c;
-  --gk-light: #ff7a54;
-  --gk-dark: #c23c22;
-  --gk-tint: #fdeae5;
+  // GitKanban — app icon background from project-assets/GitKit/assets/icon.svg
+  --gk: #efa835;
+  --gk-light: #f9d023;
+  --gk-dark: #a86616;
+  --gk-tint: #fff1d6;
+
+  // Shared product-icon internals from the same source art.
+  --app-icon-ink: #231f20;
+  --app-icon-paper: #ffffff;
+  --app-icon-card: #e8eaeb;
+  --gf-icon-highlight: #f7f9ed;
 
   // ── Active accent (neutral shell by default) ──────────────────────────
   --color-accent: var(--gitkit);
@@ -141,9 +147,12 @@
   --color-border-light: #1f2230;
 
   // Brand tints darken; base hues stay vivid on dark surfaces.
-  --gf-tint: #0e2b28;
-  --gk-tint: #2e1712;
+  --gf-tint: #26330f;
+  --gk-tint: #33230d;
   --gitkit-tint: #1f2430;
+
+  --app-icon-paper: #fcfcf5;
+  --app-icon-card: #d7dadd;
 
   // Neutral shell accent reads as a light slate in the dark. --gitkit-dark
   // stays a fixed dark ink so neutral bands/buttons keep white-text contrast

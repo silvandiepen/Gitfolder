@@ -43,12 +43,8 @@ usePageMeta({ title: t.meta.title, description: t.meta.description })
           </div>
 
           <div class="home__hero-art" aria-hidden="true">
-            <div class="home__hero-tile" data-app="gitfolder">
-              <GitFolderMark :size="72" />
-            </div>
-            <div class="home__hero-tile" data-app="gitkanban">
-              <GitKanbanMark :size="72" />
-            </div>
+            <GitFolderMark class="home__hero-icon home__hero-icon--gf" :size="150" />
+            <GitKanbanMark class="home__hero-icon home__hero-icon--gk" :size="150" />
           </div>
         </div>
       </section>
@@ -116,34 +112,24 @@ usePageMeta({ title: t.meta.title, description: t.meta.description })
 
   &__hero-art {
     display: flex;
-    gap: var(--space);
+    gap: var(--space-l);
     justify-content: center;
     align-items: center;
 
-    @include mobile { gap: var(--space-s); }
+    @include mobile { gap: var(--space); }
   }
 
-  &__hero-tile {
-    display: grid;
-    place-items: center;
-    width: 148px;
-    height: 148px;
-    border-radius: var(--border-radius-xxl);
-    color: var(--color-accent);
-    background:
-      radial-gradient(circle at 30% 24%, color-mix(in srgb, var(--color-accent) 28%, transparent), transparent 55%),
-      linear-gradient(140deg, color-mix(in srgb, var(--color-accent) 18%, var(--surface)), var(--surface));
-    border: var(--border-width) solid color-mix(in srgb, var(--color-accent) 30%, var(--color-border-light));
+  &__hero-icon {
     box-shadow: var(--shadow-l);
 
-    &:first-child { transform: translateY(-14px) rotate(-4deg); }
-    &:last-child { transform: translateY(14px) rotate(4deg); }
-
     @include mobile {
-      width: 118px;
-      height: 118px;
+      width: 112px;
+      height: 112px;
     }
   }
+
+  &__hero-icon--gf { transform: translateY(-14px) rotate(-4deg); }
+  &__hero-icon--gk { transform: translateY(14px) rotate(4deg); }
 
   &__cards {
     display: grid;

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * @view GitFolderPage
- * GitFolder product page — shipped app. Themed turquoise via data-app="gitfolder".
+ * GitFolder product page — shipped app. Themed to the green app icon background via data-app="gitfolder".
  */
 import MarketingLayout from '@/components/MarketingLayout.vue'
 import FeatureGrid from '@/components/FeatureGrid.vue'
@@ -43,7 +43,7 @@ usePageMeta({ title: t.meta.title, description: t.meta.description })
             </div>
           </div>
           <div class="mkt__hero-art">
-            <GitFolderMark class="mkt__hero-mark" :size="200" title="GitFolder" />
+            <GitFolderMark class="mkt__hero-mark" :size="224" title="GitFolder" />
           </div>
         </div>
       </section>

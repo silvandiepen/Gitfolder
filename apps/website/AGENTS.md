@@ -26,7 +26,8 @@ build on `@sil/ui` tokens. Concretely:
 - **Never hardcode px / raw hex in component styles.** Use `var(--space-*)`, `var(--font-size-*)`,
   `var(--border-radius-*)`, `var(--color-*)`, etc. Brand hex lives in exactly one place —
   the palette block in `_variables.scss`.
-- **Per-app theming:** the two brand colours are turquoise (GitFolder) and warm red (GitKanban);
+- **Per-app theming:** the two brand colours come from the app icon backgrounds in
+  `project-assets/GitKit/assets/icon.svg` — green (GitFolder) and orange (GitKanban);
   the shell is a neutral slate (GitKit). A page/section sets `data-app="gitfolder"` or
   `data-app="gitkanban"` on its root; `_variables.scss` remaps the generic `--color-accent*` tokens
   from that, so the shared `.mkt` primitives (`_marketing.scss`) theme themselves. For accent-

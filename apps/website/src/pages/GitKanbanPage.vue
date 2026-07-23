@@ -2,7 +2,7 @@
 /**
  * @view GitKanbanPage
  * GitKanban product page — not yet shipped. Framed "Coming soon" with a notify /
- * star-on-GitHub CTA. Themed warm red via data-app="gitkanban".
+ * star-on-GitHub CTA. Themed to the orange app icon background via data-app="gitkanban".
  */
 import MarketingLayout from '@/components/MarketingLayout.vue'
 import FeatureGrid from '@/components/FeatureGrid.vue'
@@ -43,7 +43,7 @@ usePageMeta({ title: t.meta.title, description: t.meta.description })
             </div>
           </div>
           <div class="mkt__hero-art">
-            <GitKanbanMark class="mkt__hero-mark" :size="200" title="GitKanban" />
+            <GitKanbanMark class="mkt__hero-mark" :size="224" title="GitKanban" />
           </div>
         </div>
       </section>
