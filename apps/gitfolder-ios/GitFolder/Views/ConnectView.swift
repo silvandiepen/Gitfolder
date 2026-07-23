@@ -41,6 +41,18 @@ struct ConnectView: View {
                         .foregroundStyle(.red).font(.callout)
                 }
             }
+
+            if model.deviceAuth == nil {
+                Section {
+                    Button {
+                        model.loadDemo()
+                    } label: {
+                        Label("Preview a demo", systemImage: "sparkles")
+                    }
+                } footer: {
+                    Text("Explore GitFolder with sample repositories — no account needed.")
+                }
+            }
         }
         .navigationTitle("Connect")
     }

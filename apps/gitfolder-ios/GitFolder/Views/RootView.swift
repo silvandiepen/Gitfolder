@@ -7,12 +7,12 @@ struct RootView: View {
     var body: some View {
         if model.isRestoring {
             ProgressView("Loading…")
-        } else if !model.isConnected {
-            NavigationStack { ConnectView() }
         } else if model.activeRepo != nil {
             FileBrowserRoot()
-        } else {
+        } else if model.isConnected || model.isDemo {
             NavigationStack { HomeView() }
+        } else {
+            NavigationStack { ConnectView() }
         }
     }
 }

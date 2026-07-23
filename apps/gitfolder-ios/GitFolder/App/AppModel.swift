@@ -45,7 +45,12 @@ final class AppModel {
 
     var isConnected: Bool { connection != nil }
 
-    @ObservationIgnored private var client: RepoFileClient?
+    /// Demo mode: an offline, in-memory repository set so the app can be explored
+    /// (and reviewed) without connecting a provider. Entered from the Connect screen
+    /// or by launching with GITFOLDER_DEMO=1.
+    var isDemo = false
+
+    @ObservationIgnored private var client: (any RepoFiles)?
 
     // MARK: Persistence
     @ObservationIgnored private let keychain = KeychainService(
@@ -217,6 +222,13 @@ final class AppModel {
     }
 
     func signOut() {
+        if isDemo {
+            isDemo = false
+            addedRepos = []
+            activeRepo = nil
+            client = nil
+            return
+        }
         try? keychain.delete()
         defaults.removeObject(forKey: connectionKey)
         defaults.removeObject(forKey: addedReposKey)
@@ -277,11 +289,26 @@ final class AppModel {
     }
 
     func openRepo(_ ref: RepoRef) {
+        if isDemo {
+            activeRepo = ref
+            errorMessage = nil
+            client = DemoRepoClient(ref: ref)
+            return
+        }
         guard let connection else { return }
         activeRepo = ref
         errorMessage = nil
         client = RepoFileClient(connection: connection, ref: ref)
         defaults.set(ref.fullName, forKey: activeRepoKey)
+    }
+
+    /// Enter demo mode: seed the home screen with the demo repositories. Nothing is
+    /// persisted; leaving demo mode (Sign Out) returns to the Connect screen.
+    func loadDemo() {
+        isDemo = true
+        isRestoring = false
+        errorMessage = nil
+        addedRepos = DemoRepoStore.refs
     }
 
     func closeRepo() {
