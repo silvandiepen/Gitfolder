@@ -1,9 +1,9 @@
 import GitKit
 import XCTest
-@testable import GitKanban
+@testable import GitKanbanKit
 
 /// Exercises the board write flows end-to-end against the in-memory demo source, so
-/// create / edit / move / delete / reorder are verified without a live provider.
+/// create / edit / move / delete / reorder are verified in the shared module.
 @MainActor
 final class AppModelWriteTests: XCTestCase {
 
@@ -25,6 +25,14 @@ final class AppModelWriteTests: XCTestCase {
         let model = await loaded()
         XCTAssertEqual(model.selectedProject?.name, "Demo Project")
         XCTAssertEqual(model.board?.columns.map(\.lane.id), ["backlog", "to-do", "in-progress", "done"])
+        XCTAssertEqual(cards(model, "to-do").count, 2)
+    }
+
+    /// Backlog lanes load lazily (skipped on first board load).
+    func testBacklogLazyLoad() async {
+        let model = await loaded()
+        XCTAssertTrue(cards(model, "backlog").isEmpty)
+        await model.loadBacklogLane(lane(model, "backlog"))
         XCTAssertEqual(cards(model, "backlog").count, 3)
     }
 
@@ -43,9 +51,9 @@ final class AppModelWriteTests: XCTestCase {
 
     func testMoveCard() async {
         let model = await loaded()
-        let card = cards(model, "backlog").first!
+        let card = cards(model, "to-do").first!
         await model.moveCard(card, to: lane(model, "in-progress"))
-        XCTAssertFalse(cards(model, "backlog").contains { $0.fields.id == card.fields.id })
+        XCTAssertFalse(cards(model, "to-do").contains { $0.fields.id == card.fields.id })
         let moved = cards(model, "in-progress").first { $0.fields.id == card.fields.id }
         XCTAssertNotNil(moved)
         XCTAssertEqual(moved?.fields.status, "in-progress")
@@ -75,20 +83,19 @@ final class AppModelWriteTests: XCTestCase {
 
     func testDeleteCard() async {
         let model = await loaded()
-        let card = cards(model, "backlog").first!
-        let before = cards(model, "backlog").count
+        let card = cards(model, "to-do").first!
+        let before = cards(model, "to-do").count
         await model.deleteCard(card)
-        XCTAssertEqual(cards(model, "backlog").count, before - 1)
-        XCTAssertFalse(cards(model, "backlog").contains { $0.fields.id == card.fields.id })
+        XCTAssertEqual(cards(model, "to-do").count, before - 1)
     }
 
     func testReorder() async {
         let model = await loaded()
-        let backlog = lane(model, "backlog")
-        let ids = cards(model, "backlog").map { $0.fields.id }
+        let todo = lane(model, "to-do")
+        let ids = cards(model, "to-do").map { $0.fields.id }
         let reversed = Array(ids.reversed())
-        await model.reorderCards(in: backlog, orderedIDs: reversed)
-        XCTAssertEqual(cards(model, "backlog").map { $0.fields.id }, reversed)
+        await model.reorderCards(in: todo, orderedIDs: reversed)
+        XCTAssertEqual(cards(model, "to-do").map { $0.fields.id }, reversed)
     }
 
     func testFilters() async {
@@ -99,5 +106,12 @@ final class AppModelWriteTests: XCTestCase {
         XCTAssertFalse(silCards.isEmpty)
         model.clearFilters()
         XCTAssertFalse(model.hasActiveFilters)
+    }
+
+    func testDuplicateCard() async {
+        let model = await loaded()
+        let before = cards(model, "to-do").count
+        await model.duplicateCard(cards(model, "to-do").first!)
+        XCTAssertEqual(cards(model, "to-do").count, before + 1)
     }
 }

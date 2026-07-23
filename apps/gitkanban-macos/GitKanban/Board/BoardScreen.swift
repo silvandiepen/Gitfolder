@@ -1,12 +1,11 @@
-import GitKit
+import AppKit
 import GitKanbanKit
+import GitKit
 import SwiftUI
-import UIKit
 
-/// The board for the active project, in either **lanes** (horizontal kanban) or
-/// **list** mode. Backlog lanes are ordered last. Tap a card for its detail (rendered
-/// description + edit), use a lane's ﹢ to add, and the toolbar to switch view, filter,
-/// or search. Edits commit over the provider API (git-pont) and reload.
+/// The board for the active project, in **lanes** (horizontal kanban) or **list** mode.
+/// Backlog lanes are ordered last. Click a card for its detail; drag between lanes to
+/// move. Edits commit over the provider API (git-pont) and reload.
 struct BoardScreen: View {
     @Environment(AppModel.self) private var model
     @State private var showNewProject = false
@@ -33,7 +32,6 @@ struct BoardScreen: View {
             }
         }
         .navigationTitle(model.selectedProject?.name ?? model.activeRepo?.name ?? "Board")
-        .navigationBarTitleDisplayMode(.inline)
         .overlay(alignment: .top) { savingBanner }
         .toolbar { toolbarContent }
         .sheet(item: $model.selectedCard) { card in CardDetailSheet(card: card).environment(model) }
@@ -55,24 +53,23 @@ struct BoardScreen: View {
     }
 
     @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
+        ToolbarItem(placement: .navigation) {
             Button { model.closeRepo() } label: {
                 HStack(spacing: 2) { Image(systemName: "chevron.left"); Text("Boards") }
             }
         }
-        ToolbarItemGroup(placement: .topBarTrailing) {
+        ToolbarItemGroup(placement: .primaryAction) {
             if let lane = firstLane {
                 Button { model.newTaskLane = lane } label: { Image(systemName: "plus") }
                     .help("New task")
             }
             Button { model.isShowingSearch = true } label: { Image(systemName: "magnifyingglass") }
+                .help("Search")
             filterMenu
             overflowMenu
         }
     }
 
-    /// If a board opens unconfigured (cards but no matching lanes), detect a config and
-    /// present the setup sheet prefilled — once per board.
     private func maybeOfferSetup() async {
         guard model.boardNeedsSetup, let project = model.selectedProject,
               !offeredSetup.contains(project.id) else { return }
@@ -81,13 +78,11 @@ struct BoardScreen: View {
         setupProject = project
     }
 
-    /// The first real (non-backlog) lane — the default target for the header + button.
     private var firstLane: Lane? {
         model.board?.config.lanes.first { !$0.folder.isEmpty && !$0.isBacklog }
             ?? model.board?.config.lanes.first { !$0.folder.isEmpty }
     }
 
-    /// Less-frequent actions folded into one menu so the bar doesn't overflow.
     private var overflowMenu: some View {
         @Bindable var model = model
         return Menu {
@@ -95,6 +90,7 @@ struct BoardScreen: View {
                 Label("Lanes", systemImage: "rectangle.split.3x1").tag(BoardViewMode.lanes)
                 Label("List", systemImage: "list.bullet").tag(BoardViewMode.list)
             }
+            .pickerStyle(.inline)
             Divider()
             Button("New Project…", systemImage: "plus") { showNewProject = true }
             if let project = model.selectedProject {
@@ -143,6 +139,7 @@ struct BoardScreen: View {
         } label: {
             Image(systemName: model.hasActiveFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
         }
+        .help("Filter")
     }
 
     @ViewBuilder private func filterLabel(_ text: String, _ selected: Bool) -> some View {
@@ -240,10 +237,9 @@ private struct LaneColumn: View {
                     Task { await model.loadBacklogLane(column.lane) }
                 } label: {
                     if model.loadingBacklogLane == column.lane.id {
-                        ProgressView().frame(maxWidth: .infinity)
+                        ProgressView().controlSize(.small).frame(maxWidth: .infinity)
                     } else {
-                        Label("Load Backlog", systemImage: "tray.and.arrow.down")
-                            .font(.callout).frame(maxWidth: .infinity)
+                        Label("Load Backlog", systemImage: "tray.and.arrow.down").frame(maxWidth: .infinity)
                     }
                 }
                 .buttonStyle(.bordered)
@@ -252,8 +248,13 @@ private struct LaneColumn: View {
             } else {
                 ScrollView(.vertical, showsIndicators: false) {
                     LazyVStack(spacing: 8) {
-                        ForEach(column.cards) { card in
-                            LaneCardCell(card: card)
+                        ForEach(column.cards) { card in LaneCardCell(card: card) }
+                        if isLane {
+                            Button { model.newTaskLane = column.lane } label: {
+                                Label("Add Task", systemImage: "plus").font(.caption).frame(maxWidth: .infinity).padding(.vertical, 6)
+                            }
+                            .buttonStyle(.plain).foregroundStyle(.secondary)
+                            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
                         }
                     }
                 }
@@ -268,7 +269,6 @@ private struct LaneColumn: View {
         .dropDestination(for: String.self) { ids, _ in handleDrop(ids) } isTargeted: { isTargeted = $0 }
     }
 
-    /// Move dropped cards (by id) into this lane.
     private func handleDrop(_ ids: [String]) -> Bool {
         guard isLane else { return false }
         var moved = false
@@ -305,15 +305,14 @@ private struct LaneCardCell: View {
             }
         }
         .padding(10)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(.quaternary, lineWidth: 1))
         .contentShape(Rectangle())
         .onTapGesture { model.selectedCard = card }
         .draggable(card.fields.id) {
-            // Drag preview: a compact chip of the card title.
             Text(card.fields.title.isEmpty ? card.fields.id : card.fields.title)
                 .font(.callout).lineLimit(1).padding(10)
-                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
+                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
         }
         .contextMenu { cardMenu(card, model: model) }
     }
@@ -352,10 +351,6 @@ private struct ListBoardView: View {
                             ids.move(fromOffsets: indices, toOffset: newOffset)
                             Task { await model.reorderCards(in: column.lane, orderedIDs: ids) }
                         }
-                        .onDelete { indices in
-                            let doomed = indices.map { column.cards[$0] }
-                            Task { for card in doomed { await model.deleteCard(card) } }
-                        }
                     }
                 } header: {
                     HStack(spacing: 7) {
@@ -372,10 +367,7 @@ private struct ListBoardView: View {
                 }
             }
         }
-        .listStyle(.insetGrouped)
-        .refreshable {
-            if let project = model.selectedProject { await model.selectProject(project) }
-        }
+        .listStyle(.inset)
     }
 }
 
@@ -422,9 +414,7 @@ func cardMenu(_ card: Card, model: AppModel) -> some View {
     if !config.lanes.isEmpty {
         Menu("Move to", systemImage: "arrow.left.arrow.right") {
             ForEach(config.lanes, id: \.id) { lane in
-                menuCheck(lane.name, card.fields.status == lane.status) {
-                    Task { await model.moveCard(card, to: lane) }
-                }
+                menuCheck(lane.name, card.fields.status == lane.status) { Task { await model.moveCard(card, to: lane) } }
             }
         }
     }
@@ -464,10 +454,10 @@ func cardMenu(_ card: Card, model: AppModel) -> some View {
     Divider()
     Button("Duplicate", systemImage: "plus.square.on.square") { Task { await model.duplicateCard(card) } }
     if let url = model.githubURL(for: card) {
-        Button("Copy Link", systemImage: "link") { UIPasteboard.general.url = url }
-        Button("Open on GitHub", systemImage: "safari") { UIApplication.shared.open(url) }
+        Button("Copy Link", systemImage: "link") { Platform.copy(url.absoluteString) }
+        Button("Open on GitHub", systemImage: "safari") { Platform.open(url) }
     }
-    Button("Copy ID", systemImage: "number") { UIPasteboard.general.string = card.fields.id }
+    Button("Copy ID", systemImage: "number") { Platform.copy(card.fields.id) }
 
     Divider()
     Button("Delete", systemImage: "trash", role: .destructive) { Task { await model.deleteCard(card) } }
@@ -480,7 +470,7 @@ private func menuCheck(_ text: String, _ selected: Bool, _ action: @escaping () 
     }
 }
 
-// MARK: - Colours (local to iOS)
+// MARK: - Colours
 
 func laneColor(_ lane: Lane, _ config: EffectiveConfig) -> Color {
     if lane.isBacklog { return Color(red: 0.45, green: 0.50, blue: 0.58) }

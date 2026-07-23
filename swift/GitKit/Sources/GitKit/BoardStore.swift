@@ -147,9 +147,11 @@ public enum BoardStore {
     private static func frontmatterFields(_ yaml: String?, fileName: String?) -> CardFields {
         let map = (yaml.flatMap { try? dictionary(from: $0) }) ?? [:]
         func str(_ key: String) -> String? {
-            if let value = map[key] as? String { return value }
-            if let value = map[key] { return String(describing: value) }
-            return nil
+            // A YAML null (empty `key:`) parses to NSNull — treat it as absent rather
+            // than stringifying it to "<null>".
+            guard let value = map[key], !(value is NSNull) else { return nil }
+            if let string = value as? String { return string }
+            return String(describing: value)
         }
         return CardFields(
             id: str("id") ?? "",

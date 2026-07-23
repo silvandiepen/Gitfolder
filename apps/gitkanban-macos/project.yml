@@ -17,6 +17,13 @@ packages:
   # The shared Swift engine both native apps depend on.
   GitKit:
     path: ../../swift/GitKit
+  # Provider REST transport types used by the UI (GitRepository, OAuth session).
+  git-pont:
+    url: https://github.com/silvandiepen/git-pont.git
+    branch: codex/initial-git-pont-monorepo
+  # The shared GitKanban app layer (AppModel + provider transport), tested once.
+  GitKanbanKit:
+    path: ../../swift/GitKanbanKit
 
 targets:
   GitKanban:
@@ -25,8 +32,12 @@ targets:
     sources:
       - path: GitKanban
     dependencies:
+      - package: GitKanbanKit
+        product: GitKanbanKit
       - package: GitKit
         product: GitKit
+      - package: git-pont
+        product: GitPontCore
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.hakobs.gitkanban

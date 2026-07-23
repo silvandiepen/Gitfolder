@@ -1,7 +1,7 @@
-import GitKit
+import AppKit
 import GitKanbanKit
+import GitKit
 import SwiftUI
-import UIKit
 import UniformTypeIdentifiers
 
 /// A card's detail: opens in a read view with the description rendered as Markdown,
@@ -16,7 +16,6 @@ struct CardDetailSheet: View {
     @State private var confirmDelete = false
     @State private var attachments: [BoardFileEntry] = []
     @State private var showImporter = false
-    @State private var shareItem: CardShareItem?
 
     // Editable state.
     @State private var title = ""
@@ -41,16 +40,15 @@ struct CardDetailSheet: View {
         NavigationStack {
             content
                 .navigationTitle(card.fields.id.isEmpty ? "Task" : card.fields.id)
-                .navigationBarTitleDisplayMode(.inline)
                 .confirmationDialog("Delete this task?", isPresented: $confirmDelete, titleVisibility: .visible) {
                     Button("Delete", role: .destructive) { Task { await model.deleteCard(card); dismiss() } }
                 }
                 .fileImporter(isPresented: $showImporter, allowedContentTypes: [.item], allowsMultipleSelection: false) { result in
                     handleImport(result)
                 }
-                .sheet(item: $shareItem) { item in ShareSheet(items: [item.url]) }
                 .task { await loadAttachments() }
         }
+        .frame(minWidth: 560, minHeight: 520)
         .onAppear(perform: seed)
     }
 
@@ -65,11 +63,9 @@ struct CardDetailSheet: View {
         Task { if await model.attachFile(to: card, data: data, filename: name) { await loadAttachments() } }
     }
 
-    private func share(_ entry: BoardFileEntry) async {
+    private func saveAttachment(_ entry: BoardFileEntry) async {
         guard let data = await model.readAttachment(path: entry.path) else { return }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(entry.name)
-        guard (try? data.write(to: url)) != nil else { return }
-        shareItem = CardShareItem(url: url)
+        Platform.save(data: data, suggestedName: entry.name)
     }
 
     @ViewBuilder private var content: some View {
@@ -96,7 +92,7 @@ struct CardDetailSheet: View {
                 if card.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text("No description.").font(.body).foregroundStyle(.secondary)
                 } else {
-                    MarkdownWebView(markdown: card.body)
+                    MarkdownWebView(markdown: card.body).frame(minHeight: 180)
                 }
 
                 Divider()
@@ -120,9 +116,9 @@ struct CardDetailSheet: View {
                 ForEach(attachments, id: \.path) { entry in
                     AttachmentRow(entry: entry)
                         .contentShape(Rectangle())
-                        .onTapGesture { Task { await share(entry) } }
+                        .onTapGesture { Task { await saveAttachment(entry) } }
                         .contextMenu {
-                            Button("Share", systemImage: "square.and.arrow.up") { Task { await share(entry) } }
+                            Button("Save…", systemImage: "square.and.arrow.down") { Task { await saveAttachment(entry) } }
                             Button("Remove", systemImage: "trash", role: .destructive) {
                                 Task { await model.deleteAttachment(path: entry.path); await loadAttachments() }
                             }
@@ -135,16 +131,10 @@ struct CardDetailSheet: View {
     @ViewBuilder private var metadata: some View {
         let cfg = config ?? EffectiveConfig()
         HStack(spacing: 6) {
-            if let lane = laneForStatus {
-                chip(lane.name, color: laneColor(lane, cfg))
-            }
-            if let p = card.fields.priority, let color = PriorityPalette.color(p, priorities) {
-                chip(p, color: color)
-            }
+            if let lane = laneForStatus { chip(lane.name, color: laneColor(lane, cfg)) }
+            if let p = card.fields.priority, let color = PriorityPalette.color(p, priorities) { chip(p, color: color) }
             if let t = card.fields.type { chip(t, color: .secondary) }
-            if let e = card.fields.epic {
-                chip(epics.first { $0.id == e }?.name ?? e, color: .purple)
-            }
+            if let e = card.fields.epic { chip(epics.first { $0.id == e }?.name ?? e, color: .purple) }
             if let a = card.fields.assignee {
                 Label("@\(a)", systemImage: "person.crop.circle").labelStyle(.titleOnly)
                     .font(.caption).foregroundStyle(.secondary)
@@ -163,8 +153,8 @@ struct CardDetailSheet: View {
 
     @ToolbarContentBuilder private var readToolbar: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
-        ToolbarItem(placement: .primaryAction) { Button("Edit") { editing = true } }
-        ToolbarItem(placement: .topBarTrailing) {
+        ToolbarItemGroup(placement: .primaryAction) {
+            Button("Edit") { editing = true }
             Menu {
                 Button("Delete", systemImage: "trash", role: .destructive) { confirmDelete = true }
             } label: { Image(systemName: "ellipsis.circle") }
@@ -210,10 +200,11 @@ struct CardDetailSheet: View {
                 }
             }
             Section("Description") {
-                TextEditor(text: $body_).frame(minHeight: 160)
+                TextEditor(text: $body_).frame(minHeight: 200)
                     .font(.system(.body, design: .monospaced))
             }
         }
+        .formStyle(.grouped)
     }
 
     @ToolbarContentBuilder private var editToolbar: some ToolbarContent {
@@ -306,10 +297,10 @@ struct NewTaskSheet: View {
                         }
                     }
                 }
-                Section("Description") { TextEditor(text: $body_).frame(minHeight: 120) }
+                Section("Description") { TextEditor(text: $body_).frame(minHeight: 140) }
             }
+            .formStyle(.grouped)
             .navigationTitle("New Task")
-            .navigationBarTitleDisplayMode(.inline)
             .onAppear { if laneID.isEmpty { laneID = lane.id } }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -331,6 +322,7 @@ struct NewTaskSheet: View {
                 }
             }
         }
+        .frame(minWidth: 520, minHeight: 520)
     }
 }
 
@@ -338,7 +330,7 @@ struct NewTaskSheet: View {
 private struct AttachmentRow: View {
     @Environment(AppModel.self) private var model
     let entry: BoardFileEntry
-    @State private var thumb: UIImage?
+    @State private var thumb: NSImage?
 
     private var isImage: Bool {
         [".png", ".jpg", ".jpeg", ".gif", ".heic", ".webp", ".bmp", ".tiff"]
@@ -350,7 +342,7 @@ private struct AttachmentRow: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 8).fill(.quaternary.opacity(0.4))
                 if let thumb {
-                    Image(uiImage: thumb).resizable().scaledToFill()
+                    Image(nsImage: thumb).resizable().scaledToFill()
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                 } else {
                     Image(systemName: isImage ? "photo" : "doc").foregroundStyle(.secondary)
@@ -359,29 +351,14 @@ private struct AttachmentRow: View {
             .frame(width: 44, height: 44)
             Text(entry.name).font(.callout).lineLimit(1)
             Spacer(minLength: 8)
-            Image(systemName: "square.and.arrow.up").font(.caption).foregroundStyle(.tertiary)
+            Image(systemName: "square.and.arrow.down").font(.caption).foregroundStyle(.tertiary)
         }
         .padding(.vertical, 4)
         .task(id: entry.path) {
             guard isImage, thumb == nil else { return }
-            if let data = await model.readAttachment(path: entry.path), let img = UIImage(data: data) {
+            if let data = await model.readAttachment(path: entry.path), let img = NSImage(data: data) {
                 thumb = img
             }
         }
     }
-}
-
-/// Identifiable temp-file wrapper for the share sheet.
-struct CardShareItem: Identifiable {
-    let id = UUID()
-    let url: URL
-}
-
-/// A SwiftUI wrapper around the system share / open-in sheet.
-struct ShareSheet: UIViewControllerRepresentable {
-    let items: [Any]
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
-    }
-    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }

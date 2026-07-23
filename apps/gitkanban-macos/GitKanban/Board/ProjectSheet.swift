@@ -36,7 +36,6 @@ struct ProjectSheet: View {
         AppModel.defaultPriorities().map { TextItem(text: $0.id) }
     }
 
-    /// Lane colour by position (matches the board's palette).
     static func laneColor(_ i: Int) -> Color {
         let palette: [Color] = [
             Color(red: 0.55, green: 0.36, blue: 0.96), Color(red: 0.23, green: 0.51, blue: 0.96),
@@ -46,21 +45,19 @@ struct ProjectSheet: View {
         return palette[i % palette.count]
     }
 
-    /// An explicit inline delete button for a settings row.
-    @ViewBuilder private func deleteButton(_ action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: "minus.circle.fill").foregroundStyle(.red)
-        }
-        .buttonStyle(.plain)
-    }
-
-    /// Priority colour by rank (highest → lowest).
     static func priorityColor(_ i: Int) -> Color {
         let ramp: [Color] = [
             Color(red: 0.90, green: 0.26, blue: 0.21), Color(red: 0.96, green: 0.55, blue: 0.09),
             Color(red: 0.23, green: 0.51, blue: 0.96), Color(red: 0.45, green: 0.50, blue: 0.58),
         ]
         return ramp[min(i, ramp.count - 1)]
+    }
+
+    @ViewBuilder private func deleteButton(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "minus.circle.fill").foregroundStyle(.red)
+        }
+        .buttonStyle(.plain)
     }
 
     var body: some View {
@@ -77,16 +74,16 @@ struct ProjectSheet: View {
                             HStack {
                                 Label("Detect from Folders", systemImage: "wand.and.stars")
                                 Spacer()
-                                if detecting { ProgressView() }
+                                if detecting { ProgressView().controlSize(.small) }
                             }
                         }
                         .disabled(detecting)
                     } footer: {
-                        Text("Read the board's folders and cards to fill in lanes, priorities, types, members, and epics. Lanes come from the subfolders; each keeps its folder + status.")
+                        Text("Read the board's folders and cards to fill in lanes, priorities, types, members, and epics.")
                     }
                 }
 
-                Section {
+                Section("Lanes") {
                     ForEach($laneItems) { $item in
                         let index = laneItems.firstIndex { $0.id == item.id } ?? 0
                         HStack(spacing: 10) {
@@ -95,51 +92,38 @@ struct ProjectSheet: View {
                             deleteButton { laneItems.removeAll { $0.id == item.id } }
                         }
                     }
-                    .onDelete { laneItems.remove(atOffsets: $0) }
-                    .onMove { laneItems.move(fromOffsets: $0, toOffset: $1) }
                     Button { laneItems.append(LaneItem(name: "", origin: nil)) } label: { Label("Add Lane", systemImage: "plus") }
-                } header: {
-                    Text("Lanes")
-                } footer: {
-                    Text("Drag to reorder (Edit); the first lanes are the start of the workflow.")
                 }
 
-                Section {
+                Section("Priorities") {
                     ForEach($priorityItems) { $item in
                         let index = priorityItems.firstIndex { $0.id == item.id } ?? 0
                         HStack(spacing: 10) {
                             Image(systemName: "flag.fill").font(.caption).foregroundStyle(Self.priorityColor(index))
-                            TextField("P0", text: $item.text).textInputAutocapitalization(.characters)
+                            TextField("P0", text: $item.text)
                             deleteButton { priorityItems.removeAll { $0.id == item.id } }
                         }
                     }
-                    .onDelete { priorityItems.remove(atOffsets: $0) }
                     Button { priorityItems.append(TextItem(text: "P\(priorityItems.count)")) } label: { Label("Add Priority", systemImage: "plus") }
-                } header: {
-                    Text("Priorities")
-                } footer: {
-                    Text("Ordered highest to lowest.")
                 }
 
                 Section("Members") {
                     ForEach($memberItems) { $item in
                         HStack {
-                            TextField("username", text: $item.text).textInputAutocapitalization(.never).autocorrectionDisabled()
+                            TextField("username", text: $item.text).autocorrectionDisabled()
                             deleteButton { memberItems.removeAll { $0.id == item.id } }
                         }
                     }
-                    .onDelete { memberItems.remove(atOffsets: $0) }
                     Button { memberItems.append(TextItem(text: "")) } label: { Label("Add Member", systemImage: "plus") }
                 }
 
                 Section("Types") {
                     ForEach($typeItems) { $item in
                         HStack {
-                            TextField("feature", text: $item.text).textInputAutocapitalization(.never)
+                            TextField("feature", text: $item.text)
                             deleteButton { typeItems.removeAll { $0.id == item.id } }
                         }
                     }
-                    .onDelete { typeItems.remove(atOffsets: $0) }
                     Button { typeItems.append(TextItem(text: "")) } label: { Label("Add Type", systemImage: "plus") }
                 }
 
@@ -150,7 +134,6 @@ struct ProjectSheet: View {
                             deleteButton { epicItems.removeAll { $0.id == item.id } }
                         }
                     }
-                    .onDelete { epicItems.remove(atOffsets: $0) }
                     Button { epicItems.append(EpicItem(name: "", origin: nil)) } label: { Label("Add Epic", systemImage: "plus") }
                 }
 
@@ -158,11 +141,10 @@ struct ProjectSheet: View {
                     Section { Text(error).font(.callout).foregroundStyle(.red) }
                 }
             }
+            .formStyle(.grouped)
             .navigationTitle(prefill != nil ? "Set Up Board" : (isEditing ? "Project Settings" : "New Project"))
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .topBarLeading) { EditButton() }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(isEditing ? "Save" : "Create") { Task { await save() } }
                         .disabled(trimmedName.isEmpty || model.isSaving)
@@ -170,6 +152,7 @@ struct ProjectSheet: View {
             }
             .onAppear(perform: seed)
         }
+        .frame(minWidth: 520, minHeight: 560)
     }
 
     private func seed() {
@@ -194,7 +177,6 @@ struct ProjectSheet: View {
         epicItems = config.epics.map { EpicItem(name: $0.name ?? $0.id, origin: $0) }
     }
 
-    /// Read the board's folders + cards and fill the form (lanes from subfolders, vocab merged).
     private func detect() {
         guard let editing, !detecting else { return }
         detecting = true
@@ -205,7 +187,6 @@ struct ProjectSheet: View {
         }
     }
 
-    /// Apply a detected config: replace lanes (folders are the source of truth), merge vocab.
     private func applyDetected(_ d: DetectedBoardConfig) {
         if !d.lanes.isEmpty {
             laneItems = d.lanes.map { LaneItem(name: $0.name, origin: $0) }
@@ -282,4 +263,3 @@ struct ProjectSheet: View {
         }
     }
 }
-

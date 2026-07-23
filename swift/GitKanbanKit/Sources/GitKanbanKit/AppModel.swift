@@ -7,13 +7,13 @@ import Observation
 
 /// Which hosted provider a connection targets. Self-hosted GitLab carries its own
 /// server URL; the others are fixed instances.
-enum ProviderChoice: String, CaseIterable, Identifiable, Codable {
+public enum ProviderChoice: String, CaseIterable, Identifiable, Codable {
     case github
     case gitlabCloud
     case gitlabSelfHosted
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var title: String {
+    public var title: String {
         switch self {
         case .github: return "GitHub"
         case .gitlabCloud: return "GitLab.com"
@@ -21,26 +21,26 @@ enum ProviderChoice: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    var needsServerURL: Bool { self == .gitlabSelfHosted }
+    public var needsServerURL: Bool { self == .gitlabSelfHosted }
 }
 
 /// How the board is laid out: horizontal kanban lanes or a grouped vertical list.
-enum BoardViewMode: String, CaseIterable, Identifiable {
+public enum BoardViewMode: String, CaseIterable, Identifiable {
     case lanes
     case list
-    var id: String { rawValue }
+    public var id: String { rawValue }
 }
 
 /// An active provider connection: the git-pont provider + instance + token used for
 /// every API call, plus the signed-in account login.
-struct ProviderConnection {
-    let choice: ProviderChoice
-    let instance: GitProviderInstance
-    let provider: any GitProvider
-    let token: String
-    let login: String
+public struct ProviderConnection {
+    public let choice: ProviderChoice
+    public let instance: GitProviderInstance
+    public let provider: any GitProvider
+    public let token: String
+    public let login: String
 
-    var requestContext: GitProviderRequestContext {
+    public var requestContext: GitProviderRequestContext {
         let now = Date()
         let connection = GitConnection(
             id: instance.id, instance: instance, accountID: login, accountLogin: login,
@@ -50,56 +50,59 @@ struct ProviderConnection {
     }
 }
 
-/// The top-level model for GitKanban iOS. Provider-agnostic: connects to GitHub,
-/// GitLab.com, or a self-hosted GitLab with a personal access token (via git-pont),
-/// then loads/edits the board over the provider API — no local clone.
+/// The top-level GitKanban view model, shared by the iOS and macOS apps. Provider-
+/// agnostic: connects to GitHub, GitLab.com, or a self-hosted GitLab (personal access
+/// token or GitHub OAuth) via git-pont, then loads/edits the board over the provider
+/// API — no local clone.
 @MainActor
 @Observable
-final class AppModel {
+public final class AppModel {
+    public init() {}
+
     // MARK: Connection
-    var connection: ProviderConnection?
-    var isConnecting = false
-    var isRestoring = true
+    public var connection: ProviderConnection?
+    public var isConnecting = false
+    public var isRestoring = true
 
     // MARK: Repos
-    var repos: [GitRepository] = []
-    var isLoadingRepos = false
+    public var repos: [GitRepository] = []
+    public var isLoadingRepos = false
 
     // MARK: Active board
     /// Boards (repos) the user has added — shown on the home screen. Persisted.
-    var addedRepos: [AddedRepo] = []
-    var activeBoardFolder: String?
+    public var addedRepos: [AddedRepo] = []
+    public var activeBoardFolder: String?
     /// The open board's repo (nil = home list). Persisted so it reopens on launch.
-    var activeRepo: AddedRepo?
-    var workspace: Workspace?
-    var selectedProject: BoardProject?
-    var board: LoadedBoard?
-    var isLoadingBoard = false
-    var isSaving = false
+    public var activeRepo: AddedRepo?
+    public var workspace: Workspace?
+    public var selectedProject: BoardProject?
+    public var board: LoadedBoard?
+    public var isLoadingBoard = false
+    public var isSaving = false
 
     // MARK: Presentation
-    var selectedCard: Card?
-    var newTaskLane: Lane?
-    var boardViewMode: BoardViewMode = .lanes
+    public var selectedCard: Card?
+    public var newTaskLane: Lane?
+    public var boardViewMode: BoardViewMode = .lanes
 
     // MARK: Filters + search
-    var filterAssignee: String?
-    var filterPriority: String?
-    var filterType: String?
-    var isShowingSearch = false
-    var searchText = ""
+    public var filterAssignee: String?
+    public var filterPriority: String?
+    public var filterType: String?
+    public var isShowingSearch = false
+    public var searchText = ""
 
-    var hasActiveFilters: Bool {
+    public var hasActiveFilters: Bool {
         filterAssignee != nil || filterPriority != nil || filterType != nil
     }
 
-    func clearFilters() {
+    public func clearFilters() {
         filterAssignee = nil
         filterPriority = nil
         filterType = nil
     }
 
-    func matchesFilters(_ card: Card) -> Bool {
+    public func matchesFilters(_ card: Card) -> Bool {
         if let filterAssignee, card.fields.assignee != filterAssignee { return false }
         if let filterPriority, card.fields.priority != filterPriority { return false }
         if let filterType, card.fields.type != filterType { return false }
@@ -107,14 +110,14 @@ final class AppModel {
     }
 
     /// Every card on the current board (all lanes + uncategorised).
-    var allCards: [Card] {
+    public var allCards: [Card] {
         (board?.columns.flatMap(\.cards) ?? []) + (board?.uncategorised ?? [])
     }
 
     // MARK: Status
-    var errorMessage: String?
+    public var errorMessage: String?
 
-    var isConnected: Bool { connection != nil }
+    public var isConnected: Bool { connection != nil }
 
     // MARK: Persistence
     @ObservationIgnored private let keychain = KeychainService(
@@ -128,11 +131,11 @@ final class AppModel {
 
     @ObservationIgnored private var source: (any BoardWritable)?
     /// True when viewing the offline in-memory demo board (no provider connection).
-    var isDemo = false
+    public var isDemo = false
 
     // MARK: - Lifecycle
 
-    func restore() async {
+    public func restore() async {
         defer { isRestoring = false }
         loadAddedRepos()
         guard let data = defaults.data(forKey: connectionKey),
@@ -163,7 +166,7 @@ final class AppModel {
 
     /// Add a repository (no boards yet). The caller then browses it to pick boards.
     @discardableResult
-    func addRepo(_ repo: GitRepository) -> AddedRepo {
+    public func addRepo(_ repo: GitRepository) -> AddedRepo {
         if let existing = addedRepos.first(where: { $0.fullName == "\(repo.reference.namespace)/\(repo.reference.name)" }) {
             return existing
         }
@@ -180,21 +183,21 @@ final class AppModel {
         return added
     }
 
-    func removeAddedRepo(_ repo: AddedRepo) {
+    public func removeAddedRepo(_ repo: AddedRepo) {
         addedRepos.removeAll { $0.id == repo.id }
         persistAddedRepos()
         if activeRepo?.id == repo.id { closeRepo() }
     }
 
     /// Set which boards are selected for a repo (from the browse/multi-select step).
-    func setBoards(_ boards: [SelectedBoard], for repoID: String) {
+    public func setBoards(_ boards: [SelectedBoard], for repoID: String) {
         guard let index = addedRepos.firstIndex(where: { $0.id == repoID }) else { return }
         addedRepos[index].boards = boards.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         persistAddedRepos()
     }
 
     /// Remove one board from a repo.
-    func removeBoard(_ board: SelectedBoard, from repo: AddedRepo) {
+    public func removeBoard(_ board: SelectedBoard, from repo: AddedRepo) {
         guard let index = addedRepos.firstIndex(where: { $0.id == repo.id }) else { return }
         addedRepos[index].boards.removeAll { $0.id == board.id }
         persistAddedRepos()
@@ -209,12 +212,12 @@ final class AppModel {
     }
 
     /// Cached total task counts per board (key = repoID|folder), for the boards list.
-    var boardCounts: [String: Int] = [:]
+    public var boardCounts: [String: Int] = [:]
 
-    func boardCount(_ repo: AddedRepo, _ folder: String) -> Int? { boardCounts["\(repo.id)|\(folder)"] }
+    public func boardCount(_ repo: AddedRepo, _ folder: String) -> Int? { boardCounts["\(repo.id)|\(folder)"] }
 
     /// Lazily count a board's tasks for the boards list (once, then cached).
-    func loadBoardCount(_ repo: AddedRepo, _ folder: String) async {
+    public func loadBoardCount(_ repo: AddedRepo, _ folder: String) async {
         let key = "\(repo.id)|\(folder)"
         guard boardCounts[key] == nil, let source = makeSource(for: repo) else { return }
         let count = (try? await RemoteBoardStore.taskCount(source: source, folder: folder)) ?? 0
@@ -223,7 +226,7 @@ final class AppModel {
 
     /// The subfolders under a repo-relative path (`""` = repo root) — for browsing to
     /// pick board folders yourself, no scanning/heuristics.
-    func listFolders(in repo: AddedRepo, at path: String) async -> [BoardFileEntry] {
+    public func listFolders(in repo: AddedRepo, at path: String) async -> [BoardFileEntry] {
         guard let source = makeSource(for: repo) else { return [] }
         let entries = (try? await source.list(path)) ?? []
         return entries
@@ -232,7 +235,7 @@ final class AppModel {
     }
 
     /// Whether the open board looks unconfigured — cards exist but no lane matched them.
-    var boardNeedsSetup: Bool {
+    public var boardNeedsSetup: Bool {
         guard let board else { return false }
         return board.config.lanes.isEmpty && !board.uncategorised.isEmpty
     }
@@ -241,7 +244,7 @@ final class AppModel {
     /// each subfolder becomes a lane (status from the cards, or the folder name), and
     /// priorities/types/members/epics are collected from the cards. Used to prefill the
     /// setup sheet; saving writes it into the board's README.
-    func detectConfig(for project: BoardProject) async -> DetectedBoardConfig {
+    public func detectConfig(for project: BoardProject) async -> DetectedBoardConfig {
         guard let source else { return DetectedBoardConfig() }
         let entries = (try? await source.list(project.folder)) ?? []
         let subdirs = entries
@@ -287,7 +290,7 @@ final class AppModel {
     // MARK: - Connect
 
     /// Validate a token against the chosen provider, then load its repositories.
-    func connect(choice: ProviderChoice, serverURL rawServerURL: String?, token rawToken: String, persist: Bool = true) async {
+    public func connect(choice: ProviderChoice, serverURL rawServerURL: String?, token rawToken: String, persist: Bool = true) async {
         let token = rawToken.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !token.isEmpty else { errorMessage = "Enter a personal access token."; return }
 
@@ -343,7 +346,7 @@ final class AppModel {
 
     /// The active GitHub device-flow session (user code + verification URL) while the
     /// user authorises in a browser. Non-nil means the Connect screen shows the code.
-    var deviceAuth: GitOAuthDeviceSession?
+    public var deviceAuth: GitOAuthDeviceSession?
 
     @ObservationIgnored private let gitHubOAuthConfig = OAuthAppConfig(
         clientID: "Ov23li24tWFt7qLuLqCe", scopes: ["repo"]
@@ -351,7 +354,7 @@ final class AppModel {
 
     /// Begin GitHub sign-in with the OAuth device flow: request a user code, surface it
     /// for the browser, then poll until the user authorises.
-    func startGitHubOAuth() async {
+    public func startGitHubOAuth() async {
         errorMessage = nil
         isConnecting = true
         let provider = GitHubProvider(httpClient: URLSessionHTTPClient(), oauth: gitHubOAuthConfig)
@@ -371,7 +374,7 @@ final class AppModel {
         }
     }
 
-    func cancelOAuth() {
+    public func cancelOAuth() {
         deviceAuth = nil
         isConnecting = false
     }
@@ -410,7 +413,7 @@ final class AppModel {
         errorMessage = error
     }
 
-    func signOut() {
+    public func signOut() {
         try? keychain.delete()
         defaults.removeObject(forKey: connectionKey)
         defaults.removeObject(forKey: addedReposKey)
@@ -429,7 +432,7 @@ final class AppModel {
 
     // MARK: - Repos
 
-    func loadRepos() async {
+    public func loadRepos() async {
         guard let connection else { return }
         isLoadingRepos = true
         errorMessage = nil
@@ -443,14 +446,14 @@ final class AppModel {
         }
     }
 
-    func fullName(_ repo: GitRepository) -> String {
+    public func fullName(_ repo: GitRepository) -> String {
         "\(repo.reference.namespace)/\(repo.reference.name)"
     }
 
     // MARK: - Open a board
 
     /// Open a specific board (project folder) within a repo.
-    func openBoard(_ repo: AddedRepo, folder: String) async {
+    public func openBoard(_ repo: AddedRepo, folder: String) async {
         guard let source = makeSource(for: repo) else { return }
         activeRepo = repo
         activeBoardFolder = folder
@@ -473,7 +476,7 @@ final class AppModel {
     }
 
     /// Load the offline in-memory demo board — explore the app without connecting.
-    func loadDemo() async {
+    public func loadDemo() async {
         isDemo = true
         isRestoring = false
         errorMessage = nil
@@ -500,10 +503,10 @@ final class AppModel {
     }
 
     /// Backlog lanes whose cards have been lazily loaded (they're skipped on first load).
-    var loadedBacklogLanes: Set<String> = []
-    var loadingBacklogLane: String?
+    public var loadedBacklogLanes: Set<String> = []
+    public var loadingBacklogLane: String?
 
-    func selectProject(_ project: BoardProject) async {
+    public func selectProject(_ project: BoardProject) async {
         guard let source, let workspace else { return }
         isLoadingBoard = true
         defer { isLoadingBoard = false }
@@ -519,7 +522,7 @@ final class AppModel {
     }
 
     /// Lazily load a backlog lane's cards on demand.
-    func loadBacklogLane(_ lane: Lane) async {
+    public func loadBacklogLane(_ lane: Lane) async {
         guard let source, let project = selectedProject, let rootConfig = workspace?.rootConfig, var board else { return }
         loadingBacklogLane = lane.id
         defer { loadingBacklogLane = nil }
@@ -532,7 +535,7 @@ final class AppModel {
         loadedBacklogLanes.insert(lane.id)
     }
 
-    func closeRepo() {
+    public func closeRepo() {
         activeRepo = nil
         activeBoardFolder = nil
         workspace = nil
@@ -548,13 +551,13 @@ final class AppModel {
     // MARK: - Projects (board settings)
 
     /// Default 5 lanes for a new project.
-    static func defaultProjectLanes() -> [Lane] {
+    public static func defaultProjectLanes() -> [Lane] {
         lanes(fromNames: ["To do", "In Progress", "In Review", "Testing", "Done"], terminalLast: true)
     }
-    static func defaultPriorities() -> [Priority] { (0...3).map { Priority(id: "P\($0)") } }
+    public static func defaultPriorities() -> [Priority] { (0...3).map { Priority(id: "P\($0)") } }
 
     /// Build lanes from display names: folder = "<n>. <name>", id/status = slug.
-    static func lanes(fromNames names: [String], terminalLast: Bool = false) -> [Lane] {
+    public static func lanes(fromNames names: [String], terminalLast: Bool = false) -> [Lane] {
         let cleaned = names.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         return cleaned.enumerated().map { index, name in
             let slug = name.lowercased().replacingOccurrences(of: " ", with: "-")
@@ -565,7 +568,7 @@ final class AppModel {
 
     /// Create a project: write its README config (one commit). Lanes render from config,
     /// so empty lane folders aren't needed — they're created on the first task add.
-    func createProject(name rawName: String, description: String, lanes: [Lane],
+    public func createProject(name rawName: String, description: String, lanes: [Lane],
                        priorities: [Priority], users: [User], epics: [Epic]) async {
         let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let source else { return }
@@ -593,7 +596,7 @@ final class AppModel {
     }
 
     /// Save a project's settings by rewriting its README config (one commit).
-    func saveProjectSettings(project: BoardProject, name: String, description: String, lanes: [Lane],
+    public func saveProjectSettings(project: BoardProject, name: String, description: String, lanes: [Lane],
                             priorities: [Priority], users: [User], types: [String], epics: [Epic]) async {
         guard let source else { return }
         let readme = BoardStore.renderProjectReadme(
@@ -630,7 +633,7 @@ final class AppModel {
 
     // MARK: - Writes (over the provider API via git-pont)
 
-    func createTask(
+    public func createTask(
         title rawTitle: String, lane: Lane,
         priority: String?, type: String?, assignee: String?, epic: String? = nil, body: String
     ) async {
@@ -646,7 +649,7 @@ final class AppModel {
         await performWrite { try await source.write(path: path, text: content, message: "Add task \(id)") }
     }
 
-    func moveCard(_ card: Card, to lane: Lane) async {
+    public func moveCard(_ card: Card, to lane: Lane) async {
         guard let source, let project = selectedProject,
               let location = location(of: card), let fileName = card.fileName,
               location.lane.id != lane.id, !lane.folder.isEmpty else { return }
@@ -678,7 +681,7 @@ final class AppModel {
         isSaving = false
     }
 
-    func updateCard(
+    public func updateCard(
         _ card: Card, title: String, laneID: String,
         priority: String, type: String, assignee: String, epic: String = "", body: String
     ) async {
@@ -702,13 +705,13 @@ final class AppModel {
         }
     }
 
-    func deleteCard(_ card: Card) async {
+    public func deleteCard(_ card: Card) async {
         guard let source, let location = location(of: card) else { return }
         await performWrite { try await source.delete(path: location.path, message: "Delete \(card.fields.id)") }
     }
 
     /// Update one or more frontmatter fields on a card in place (no lane move).
-    func setCardField(_ card: Card, _ updates: [String: String?]) async {
+    public func setCardField(_ card: Card, _ updates: [String: String?]) async {
         guard let source, let location = location(of: card) else { return }
         let original = (try? await source.readText(location.path)) ?? card.body
         let updated = CardText.update(original, set: updates)
@@ -716,7 +719,7 @@ final class AppModel {
     }
 
     /// Duplicate a card into the same lane with a fresh id.
-    func duplicateCard(_ card: Card) async {
+    public func duplicateCard(_ card: Card) async {
         guard let source, let project = selectedProject, let location = location(of: card) else { return }
         let original = (try? await source.readText(location.path)) ?? card.body
         let base = card.fields.title.isEmpty ? "task" : card.fields.title
@@ -738,7 +741,7 @@ final class AppModel {
     }
 
     /// The files attached to a card.
-    func attachments(for card: Card) async -> [BoardFileEntry] {
+    public func attachments(for card: Card) async -> [BoardFileEntry] {
         guard let source, let dir = attachmentsDir(for: card) else { return [] }
         let entries = (try? await source.list(dir)) ?? []
         return entries.filter { $0.kind == .file }.sorted { $0.name < $1.name }
@@ -746,7 +749,7 @@ final class AppModel {
 
     /// Attach a file to a card (committed to its attachments folder).
     @discardableResult
-    func attachFile(to card: Card, data: Data, filename: String) async -> Bool {
+    public func attachFile(to card: Card, data: Data, filename: String) async -> Bool {
         guard let source, let dir = attachmentsDir(for: card) else { return false }
         let safe = filename.map { $0.isLetter || $0.isNumber || "._- ".contains($0) ? $0 : "-" }
         let name = String(safe).trimmingCharacters(in: .whitespaces)
@@ -757,19 +760,19 @@ final class AppModel {
         } catch { errorMessage = error.localizedDescription; return false }
     }
 
-    func deleteAttachment(path: String) async {
+    public func deleteAttachment(path: String) async {
         guard let source else { return }
         isSaving = true; errorMessage = nil; defer { isSaving = false }
         try? await source.delete(path: path, message: "Remove attachment \(path)")
     }
 
-    func readAttachment(path: String) async -> Data? {
+    public func readAttachment(path: String) async -> Data? {
         guard let source else { return nil }
         return try? await source.readData(path)
     }
 
     /// The github.com blob URL for a card's file (Copy Link / Open on GitHub).
-    func githubURL(for card: Card) -> URL? {
+    public func githubURL(for card: Card) -> URL? {
         guard connection?.choice == .github, let repo = activeRepo, let location = location(of: card) else { return nil }
         let encoded = location.path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? location.path
         return URL(string: "https://github.com/\(repo.namespace)/\(repo.name)/blob/\(repo.branch)/\(encoded)")
@@ -777,7 +780,7 @@ final class AppModel {
 
     /// Persist a new within-lane order by rewriting each card's `order` frontmatter.
     /// Only cards whose order actually changed are committed.
-    func reorderCards(in lane: Lane, orderedIDs: [String]) async {
+    public func reorderCards(in lane: Lane, orderedIDs: [String]) async {
         guard let source, let project = selectedProject, let board,
               let column = board.columns.first(where: { $0.lane.id == lane.id }) else { return }
         let byID = Dictionary(uniqueKeysWithValues: column.cards.map { ($0.fields.id, $0) })

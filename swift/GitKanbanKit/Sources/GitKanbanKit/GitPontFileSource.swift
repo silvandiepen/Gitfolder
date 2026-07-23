@@ -4,9 +4,9 @@ import GitPontCore
 import GitPontGitHub
 
 /// A `BoardFileSource` backed by a hosted git provider's REST API through git-pont —
-/// the iOS transport. Unlike macOS (which shells out to `git` against a local clone),
-/// iOS has no shell, so the board is read directly over the API: directory listings
-/// and file contents for a given repo + branch.
+/// the transport for both GitKanban apps. There is no local clone: the board is read
+/// directly over the API (directory listings and file contents for a repo + branch)
+/// and written with `commitFile`/`deleteFile`.
 ///
 /// It is provider-agnostic: pass any git-pont provider (`GitHubProvider`,
 /// `GitLabProvider`, …) and its `GitProviderInstance` (including a self-hosted GitLab

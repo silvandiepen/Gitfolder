@@ -87,6 +87,7 @@ apps/gitkanban-ios/GitKanban/
     MarkdownView.swift     lightweight native Markdown renderer for card descriptions
     GitPontFileSource.swift BoardFileSource over git-pont (list/readText/write/delete)
     BoardSource.swift      seeded demo workspace (sample board)
+  Assets.xcassets/         AppIcon (1024px, shared with the macOS app)
 ```
 
 ## Dependency direction (monorepo rule)

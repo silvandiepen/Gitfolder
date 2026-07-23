@@ -14,13 +14,16 @@ settings:
     DEVELOPMENT_TEAM: "38MGF83L2L"
 
 packages:
-  # iOS transport: the GitHub REST API via git-pont (no local clone / no shell).
+  # Provider REST transport types used by the UI (GitRepository, OAuth session).
   git-pont:
     url: https://github.com/silvandiepen/git-pont.git
     branch: codex/initial-git-pont-monorepo
   # The shared board model + parsers (mirrors @gitkit/gitkanban-core).
   GitKit:
     path: ../../swift/GitKit
+  # The shared GitKanban app layer (AppModel + provider transport), tested once.
+  GitKanbanKit:
+    path: ../../swift/GitKanbanKit
 
 targets:
   GitKanban:
@@ -29,12 +32,10 @@ targets:
     sources:
       - path: GitKanban
     dependencies:
+      - package: GitKanbanKit
+        product: GitKanbanKit
       - package: git-pont
         product: GitPontCore
-      - package: git-pont
-        product: GitPontGitHub
-      - package: git-pont
-        product: GitPontGitLab
       - package: GitKit
         product: GitKit
     settings:
@@ -43,6 +44,7 @@ targets:
         INFOPLIST_FILE: GitKanban/Info.plist
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     info:
       path: GitKanban/Info.plist
       properties:

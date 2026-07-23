@@ -1,4 +1,5 @@
 import SwiftUI
+import GitKanbanKit
 
 @main
 struct GitKanbanApp: App {

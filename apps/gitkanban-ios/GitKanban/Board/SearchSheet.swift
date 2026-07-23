@@ -1,4 +1,5 @@
 import GitKit
+import GitKanbanKit
 import SwiftUI
 
 /// Full-board search: match cards by title, id, body, assignee, or type across every
